@@ -1,12 +1,9 @@
 name: Sync Match Data
 
 on:
-  schedule:
-    # Run every 15 minutes during match days
-    - cron: '*/15 * * * *'
-  
-  # Allow manual trigger from GitHub Actions tab
-  workflow_dispatch:
+  # schedule:
+  #   - cron: '*/15 * * * *'
+  workflow_dispatch:  # só roda manualmente
 
 jobs:
   sync:
