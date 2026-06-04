@@ -136,7 +136,7 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig }) => {
             {lang === 'pt' ? '📊 Considera tempo regulamentar + prorrogação. Pênaltis NÃO contam.' : lang === 'es' ? '📊 Tiempo regular + prórroga. Penales NO cuentan.' : '📊 Regular time + extra time. Penalties do NOT count.'}
           </p>
           <p className="text-xs text-red-700 font-medium">
-            {lang === 'pt' ? '👁️ Palpites ficam ocultos até o jogo começar.' : lang === 'es' ? '👁️ Pronósticos ocultos hasta el inicio.' : '👁️ Predictions hidden until match starts.'}
+            {lang === 'pt' ? '👁️ Palpites ficam ocultos para os outros participantes até o jogo começar.' : lang === 'es' ? '👁️ Pronósticos ocultos hasta el inicio.' : '👁️ Predictions hidden until match starts.'}
           </p>
         </div>
       </div>
