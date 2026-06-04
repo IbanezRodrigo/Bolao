@@ -348,10 +348,10 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
                   {/* Avatar */}
                   <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center overflow-hidden border-2 border-white shadow-md">
                     {entry.avatar_url ? (
-                      <img src={entry.avatar_url} alt={entry.display_name} className="w-full h-full object-cover" />
+                      <img src={entry.avatar_url} alt={`${entry.name} ${entry.surname}`} className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-slate-600 font-black text-lg">
-                        {entry.display_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                        {`${entry.name} ${entry.surname}`.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
                       </span>
                     )}
                   </div>
@@ -359,7 +359,7 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
                   {/* Name */}
                   <div className="flex-1 min-w-0">
                     <p className={`font-black text-sm truncate ${isCurrentUser ? 'text-blue-900' : 'text-slate-900'}`}>
-                      {entry.display_name}
+                      {`${entry.name} ${entry.surname}`}
                       {isCurrentUser && (
                         <span className="ml-2 text-[10px] bg-blue-500 text-white px-2 py-0.5 rounded-full">
                           {lang === 'pt' ? 'VOCÊ' : lang === 'es' ? 'TÚ' : 'YOU'}
@@ -399,7 +399,7 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
                 <p className="font-black text-sm">
                   {lang === 'pt' ? 'Sua Posição' : lang === 'es' ? 'Tu Posición' : 'Your Position'}
                 </p>
-                <p className="text-xs text-blue-100">{currentUserEntry.display_name}</p>
+                <p className="text-xs text-blue-100">{currentUser`${entry.name} ${entry.surname}`}</p>
               </div>
             </div>
             <div className="text-right">
