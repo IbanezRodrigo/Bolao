@@ -199,37 +199,33 @@ const App: React.FC = () => {
   };
 
   // ── Groups ────────────────────────────────────────────────────────────────
-  const handleJoinGroup = async (groupId: string) => {
+const handleJoinGroup = async (groupId: string) => {
   if (!user?.id || user.groupIds.includes(groupId)) return;
-  await supabase.from('user_groups').insert({ 
-    user_id: user.id, 
-    group_id: groupId, 
-    role: 'MEMBER' 
-  });
-  const updatedGroupIds = [...user.groupIds, groupId];
-  setUser(prev => prev ? { ...prev, groupIds: updatedGroupIds } : prev);
+  await supabase.from('user_groups').insert({ user_id: user.id, group_id: groupId, role: 'MEMBER' });
+  // Recarregar grupos do Supabase
+  const { data: memberships } = await supabase.from('user_groups').select('group_id').eq('user_id', user.id).eq('is_active', true);
+  const groupIds = memberships?.map((m: any) => m.group_id) || [];
+  setUser(prev => prev ? { ...prev, groupIds } : prev);
   setActiveGroupId(groupId);
   setActiveTab('matches');
 };
   
-  const handleCreateGroup = async (newGroup: Group) => {
+const handleCreateGroup = async (newGroup: Group) => {
   if (!user?.id) return;
   const { data, error } = await supabase.from('groups').insert({
-    code:             newGroup.code,
-    name:             newGroup.name,
-    description:      newGroup.description,
-    initials:         newGroup.initials,
+    code: newGroup.code, name: newGroup.name,
+    description: newGroup.description, initials: newGroup.initials,
     language_default: newGroup.languageDefault,
-    owner_user_id:    user.id,
-    is_private:       newGroup.isPrivate,
+    owner_user_id: user.id, is_private: newGroup.isPrivate,
   }).select().single();
   if (error) throw error;
-
-  await supabase.from('user_groups').insert({ 
-    user_id: user.id, 
-    group_id: data.id, 
-    role: 'OWNER' 
-  });
+  await supabase.from('user_groups').insert({ user_id: user.id, group_id: data.id, role: 'OWNER' });
+  // Recarregar grupos do Supabase
+  const { data: memberships } = await supabase.from('user_groups').select('group_id').eq('user_id', user.id).eq('is_active', true);
+  const groupIds = memberships?.map((m: any) => m.group_id) || [];
+  setUser(prev => prev ? { ...prev, groupIds } : prev);
+  setActiveGroupId(data.id);
+};
 
   // FIX: atualiza estado local imediatamente
   const updatedGroupIds = [...user.groupIds, data.id];
