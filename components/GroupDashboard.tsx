@@ -347,8 +347,8 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
 
                   {/* Avatar */}
                   <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center overflow-hidden border-2 border-white shadow-md">
-                    {entry.avatar_url ? (
-                      <img src={entry.avatar_url} alt={`${entry.name} ${entry.surname}`} className="w-full h-full object-cover" />
+                    {entry.photo_url ? (
+                      <img src={entry.photo_url} alt={`${entry.name} ${entry.surname}`} className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-slate-600 font-black text-lg">
                         {`${entry.name} ${entry.surname}`.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
