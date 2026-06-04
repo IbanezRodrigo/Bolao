@@ -1,13 +1,5 @@
-{
-  "functions": {
-    "api/*.ts": {
-      "runtime": "nodejs20.x"
-    }
-  },
-  "crons": [
-    {
-      "path": "/api/update-matches",
-      "schedule": "*/15 * * * *"
-    }
+json{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
