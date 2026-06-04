@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Match, Team, MatchPhase, MatchStatus } from '../types';
-import { TEAMS, getTeamFlag } from '../constants';
 import { supabase } from '../supabase';
 
 interface UseMatchesReturn {
@@ -21,29 +20,25 @@ interface DBMatch {
   phase: MatchPhase | null;
   status: MatchStatus | null;
   external_id: string | null;
+  home_team: DBTeam;
+  away_team: DBTeam;
 }
 
-const getTeamObject = (teamId: string): Team => {
-  // Tenta achar pelo ID direto (ex: 'BRA', 'USA')
-  if (TEAMS[teamId]) return TEAMS[teamId];
+interface DBTeam {
+  id: string;
+  name_pt: string;
+  name_en: string;
+  name_es: string;
+  flag: string;
+  color: string;
+}
 
-  // Tenta achar por nome em qualquer idioma
-  const found = Object.values(TEAMS).find(
-    t =>
-      t.name.pt.toLowerCase() === teamId.toLowerCase() ||
-      t.name.en.toLowerCase() === teamId.toLowerCase() ||
-      t.name.es.toLowerCase() === teamId.toLowerCase()
-  );
-  if (found) return found;
-
-  // Fallback
-  return {
-    id: teamId,
-    name: { pt: teamId, en: teamId, es: teamId },
-    flag: getTeamFlag(teamId),
-    color: '#CCCCCC',
-  };
-};
+const dbTeamToFrontend = (t: DBTeam): Team => ({
+  id: t.id,
+  name: { pt: t.name_pt, en: t.name_en, es: t.name_es },
+  flag: t.flag,
+  color: t.color,
+});
 
 export const useMatches = (): UseMatchesReturn => {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -58,7 +53,11 @@ export const useMatches = (): UseMatchesReturn => {
 
         const { data, error: fetchError } = await supabase
           .from('matches')
-          .select('*')
+          .select(`
+            *,
+            home_team:teams!matches_home_team_id_fkey(id, name_pt, name_en, name_es, flag, color),
+            away_team:teams!matches_away_team_id_fkey(id, name_pt, name_en, name_es, flag, color)
+          `)
           .order('start_time', { ascending: true });
 
         if (fetchError) {
@@ -71,8 +70,8 @@ export const useMatches = (): UseMatchesReturn => {
 
         const transformed: Match[] = data.map((m: DBMatch) => ({
           id:               m.id,
-          homeTeam:         getTeamObject(m.home_team_id),
-          awayTeam:         getTeamObject(m.away_team_id),
+          homeTeam:         dbTeamToFrontend(m.home_team),
+          awayTeam:         dbTeamToFrontend(m.away_team),
           startTime:        m.start_time,
           venue:            m.venue || '',
           group:            m.match_group || '',
