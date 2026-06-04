@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { User, Language, Prediction, Match, Group, UserGroup, ScoringConfig } from './types';
-import { TRANSLATIONS, MOCK_MATCHES, MOCK_GROUPS, SCORING_RULES as INITIAL_SCORING_RULES } from './constants';
+import { User, Language, Prediction, Group, UserGroup, ScoringConfig } from './types';
+import { TRANSLATIONS, SCORING_RULES as INITIAL_SCORING_RULES } from './constants';
 import Login from './components/Auth';
 import MatchList from './components/MatchList';
 import ProfileSetup from './components/ProfileSetup';
@@ -19,105 +18,39 @@ const App: React.FC = () => {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [viewingGroupDashboard, setViewingGroupDashboard] = useState(false);
   const [scoringRules, setScoringRules] = useState<ScoringConfig>(INITIAL_SCORING_RULES);
+  const [currentGroup, setCurrentGroup] = useState<Group | null>(null);
 
   const t = TRANSLATIONS[lang];
 
-  // Helper to get current user ID
-  const getCurrentUserId = async (): Promise<string | null> => {
-    const { data } = await supabase.auth.getSession();
-    return data?.session?.user?.id || null;
-  };
-
-  // DIAGNOSTIC: Log state changes for debugging
+  // ── Fetch scoring rules do Supabase (novo schema v2) ─────────────────────
   useEffect(() => {
-    console.log('📊 APP STATE UPDATE:');
-    console.log('  - activeTab:', activeTab);
-    console.log('  - viewingGroupDashboard:', viewingGroupDashboard);
-    console.log('  - activeGroupId:', activeGroupId);
-    console.log('  - user:', user);
-  }, [activeTab, viewingGroupDashboard, activeGroupId]);
-
-  useEffect(() => {
-    // Initialize DB with Mock users for reveal testing if empty
-    const usersDB = localStorage.getItem('wc_users_db');
-    if (!usersDB) {
-      const mockUsers: User[] = [
-        {
-          email: 'leo@worldcup.com',
-          name: 'Leo',
-          surname: 'Messi',
-          preferredTeam: 'Argentina',
-          groupIds: ['g1', 'g2', 'g3'],
-          predictions: {
-            'm1': { homeScore: 2, awayScore: 1, timestamp: Date.now(), isJoker: true },
-            'm2': { homeScore: 0, awayScore: 0, timestamp: Date.now() }
-          }
-        },
-        {
-          email: 'cris@worldcup.com',
-          name: 'Cristiano',
-          surname: 'Ronaldo',
-          preferredTeam: 'Portugal',
-          groupIds: ['g1'],
-          predictions: {
-            'm1': { homeScore: 1, awayScore: 1, timestamp: Date.now() },
-            'm2': { homeScore: 3, awayScore: 0, timestamp: Date.now(), isJoker: true }
-          }
-        }
-      ];
-      localStorage.setItem('wc_users_db', JSON.stringify(mockUsers));
-    }
-
-    const savedUser = localStorage.getItem('wc_user');
-    if (savedUser) {
-      const parsedUser: User = JSON.parse(savedUser);
-      setUser(parsedUser);
-      if (parsedUser.groupIds && parsedUser.groupIds.length > 0) {
-        setActiveGroupId(parsedUser.groupIds[0]);
-      }
-    }
-    
-    // Initialize mock groups in DB if not exists
-    if (!localStorage.getItem('wc_groups_db')) {
-      localStorage.setItem('wc_groups_db', JSON.stringify(MOCK_GROUPS));
-    }
-
-    // Fetch scoring rules from Supabase
     const fetchScoringRules = async () => {
       try {
-        console.log('🔄 Fetching scoring rules from Supabase...');
-        console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
-        
         const { data, error } = await supabase
           .from('scoring_rules')
-          .select('exact, diff, outcome, one_score')
+          .select('exact_score, winner, correct_draw, goal_diff, one_team_score, mult_group, mult_r16, mult_qf, mult_sf, mult_final')
           .eq('id', 'current')
           .single();
 
-        console.log('📡 Supabase Response:');
-        console.log('  - Data:', data);
-        console.log('  - Error:', error);
-
-        if (error) {
-          console.error('❌ Supabase Error:', error);
-          throw error;
-        }
+        if (error) throw error;
 
         if (data) {
-          console.log('✅ Successfully fetched scoring rules:', data);
           setScoringRules({
-            exact: data.exact,
-            diff: data.diff,
-            outcome: data.outcome,
-            oneScore: data.one_score
+            exactScore:   data.exact_score,
+            winner:       data.winner,
+            correctDraw:  data.correct_draw,
+            goalDiff:     data.goal_diff,
+            oneTeamScore: data.one_team_score,
+            multGroup:    data.mult_group,
+            multR16:      data.mult_r16,
+            multQF:       data.mult_qf,
+            multSF:       data.mult_sf,
+            multFinal:    data.mult_final,
           });
-        } else {
-          console.warn('⚠️ Data is null or empty');
-          setScoringRules(INITIAL_SCORING_RULES);
+          console.log('✅ Scoring rules loaded from Supabase');
         }
       } catch (err) {
-        console.error('❌ Failed to fetch scoring rules:', err);
-        console.log('📌 Falling back to defaults');
+        console.error('❌ Failed to fetch scoring rules, using defaults:', err);
         setScoringRules(INITIAL_SCORING_RULES);
       }
     };
@@ -125,375 +58,188 @@ const App: React.FC = () => {
     fetchScoringRules();
   }, []);
 
-  const handleLogin = async (loginEmail: string, password: string) => {
-    try {
-      console.log('🔐 Attempting Supabase login...');
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password: password
-      });
+  // ── Fetch grupo ativo ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeGroupId) { setCurrentGroup(null); return; }
 
-      if (error) throw error;
+    const fetchGroup = async () => {
+      const { data, error } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('id', activeGroupId)
+        .single();
 
-      if (data?.user?.id) {
-        console.log('✅ Login successful, fetching profile...');
-        
-        // Fetch user profile from profiles table with retry logic
-        let profile = null;
-        let attempts = 0;
-        const maxAttempts = 3;
-
-        while (!profile && attempts < maxAttempts) {
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .maybeSingle();
-
-          if (profileError) {
-            console.error('❌ Profile fetch error:', profileError);
-            // Continue retrying even on error
-          }
-
-          if (profileData) {
-            profile = profileData;
-            console.log('✅ Profile fetched successfully');
-            break;
-          }
-
-          attempts++;
-          if (attempts < maxAttempts) {
-            console.log(`⏳ Profile not found yet (attempt ${attempts}/${maxAttempts}). Retrying in 300ms...`);
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
-        }
-
-        // SELF-HEALING: If profile still missing, create it
-        if (!profile) {
-          console.warn('⚠️ Profile not found after retries. Attempting self-heal (upsert)...');
-          
-          const { data: upsertedProfile, error: upsertError } = await supabase
-            .from('profiles')
-            .upsert(
-              {
-                id: data.user.id,
-                email: data.user.email || loginEmail,
-                name: data.user.user_metadata?.name || 'User',
-                surname: data.user.user_metadata?.surname || '',
-                updated_at: new Date()
-              },
-              { onConflict: 'id' }
-            )
-            .select()
-            .maybeSingle();
-
-          if (upsertError) {
-            console.error('❌ Self-heal upsert failed:', upsertError);
-            throw upsertError;
-          }
-
-          if (upsertedProfile) {
-            profile = upsertedProfile;
-            console.log('✅ Profile self-healed (upserted successfully)');
-          }
-        }
-
-        if (!profile) {
-          throw new Error('Could not fetch or create profile');
-        }
-
-        const loggedUser: User = {
-          id: data.user.id,
-          email: profile.email,
-          name: profile.name || 'User',
-          surname: profile.surname || '',
-          preferredTeam: profile.preferred_team || '',
-          groupIds: [],
-          predictions: {}
-        };
-
-        setUser(loggedUser);
-        localStorage.setItem('wc_user', JSON.stringify(loggedUser));
-        
-        if (loggedUser.groupIds?.length > 0) {
-          setActiveGroupId(loggedUser.groupIds[0]);
-        }
+      if (!error && data) {
+        setCurrentGroup({
+          id:              data.id,
+          code:            data.code,
+          name:            data.name,
+          description:     data.description,
+          photoUrl:        data.photo_url,
+          initials:        data.initials,
+          languageDefault: data.language_default,
+          ownerUserId:     data.owner_user_id,
+          isPrivate:       data.is_private,
+          status:          data.status,
+          createdAt:       new Date(data.created_at).getTime(),
+          updatedAt:       new Date(data.updated_at).getTime(),
+        });
       }
-    } catch (err) {
-      console.error('❌ Login failed:', err);
-      throw err;
+    };
+
+    fetchGroup();
+  }, [activeGroupId]);
+
+  // ── Restore session ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const restoreSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.user) {
+        await loadUserProfile(data.session.user.id, data.session.user.email || '');
+      }
+    };
+    restoreSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setActiveGroupId(null);
+      }
+    });
+    return () => listener?.subscription?.unsubscribe();
+  }, []);
+
+  // ── Helper: carregar profile ──────────────────────────────────────────────
+  const loadUserProfile = async (userId: string, email: string) => {
+    let profile = null;
+    for (let i = 0; i < 5; i++) {
+      const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      if (data) { profile = data; break; }
+      await new Promise(r => setTimeout(r, 200 * (i + 1)));
     }
-  };
 
-  const handleRegister = async (registerEmail: string, password: string) => {
-    try {
-      console.log('📝 Attempting Supabase signup...');
-      
-      const { data, error } = await supabase.auth.signUp({
-        email: registerEmail,
-        password: password
-      });
-
-      if (error) {
-        console.error('❌ Signup error:', error);
-        throw error;
-      }
-
-      if (!data?.user?.id) {
-        throw new Error('Signup failed: No user ID returned');
-      }
-
-      console.log('✅ Signup successful. User created:', data.user.id);
-
-      // SCENARIO CHECK: Does the user have an active session?
-      if (data.session) {
-        // ✅ DEV MODE: Email confirmation is DISABLED
-        // User is immediately authenticated. Fetch and login.
-        console.log('🟢 DEV MODE: Email auto-confirmed. Auto-logging in...');
-        
-        // Retry logic to handle race condition with trigger
-        let profile = null;
-        let attempts = 0;
-        const maxAttempts = 5;
-
-        while (!profile && attempts < maxAttempts) {
-          // Use maybeSingle() instead of single() to gracefully handle 0 rows
-          const { data: profileData, error: fetchError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .maybeSingle();
-
-          if (fetchError) {
-            console.error('⚠️ Profile fetch error:', fetchError);
-            // Don't throw, just retry
-          }
-
-          if (profileData) {
-            profile = profileData;
-            console.log('✅ Profile fetched after attempt', attempts + 1);
-            break;
-          }
-
-          attempts++;
-          if (attempts < maxAttempts) {
-            const delay = 200 * attempts; // Progressive backoff: 200ms, 400ms, 600ms, 800ms
-            console.log(`⏳ Profile not found yet (attempt ${attempts}/${maxAttempts}). Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
-        }
-
-        // SELF-HEALING: If profile still missing after retries, manually create it
-        if (!profile) {
-          console.warn('⚠️ Profile not found after retries. Attempting self-heal (upsert)...');
-          
-          const { data: upsertedProfile, error: upsertError } = await supabase
-            .from('profiles')
-            .upsert(
-              {
-                id: data.user.id,
-                email: registerEmail,
-                updated_at: new Date()
-              },
-              { onConflict: 'id' }
-            )
-            .select()
-            .maybeSingle();
-
-          if (upsertError) {
-            console.error('❌ Self-heal upsert failed:', upsertError);
-            console.error('Full error details:', JSON.stringify(upsertError));
-            // Continue anyway - user is authenticated, just profile might be missing
-          }
-
-          if (upsertedProfile) {
-            profile = upsertedProfile;
-            console.log('✅ Profile self-healed (upserted successfully)');
-          }
-        }
-
-        // Use the fetched profile or fallback data
-        const newUser: User = {
-          id: data.user.id,
-          email: profile?.email || registerEmail,
-          name: profile?.name || 'User',
-          surname: profile?.surname || '',
-          preferredTeam: profile?.preferred_team || '',
-          groupIds: [],
-          predictions: {}
-        };
-        
-        setUser(newUser);
-        setShowProfileSetup(true);
-        console.log('✅ User logged in and setup initiated');
-      } else {
-        // ⚠️ PROD MODE: Email confirmation is ENABLED
-        // User account created but NOT authenticated. Must verify email first.
-        console.log('🔴 PROD MODE: Email verification required. Showing confirmation message...');
-        
-        alert(
-          `✅ Registration Successful!\n\n` +
-          `We've sent a confirmation email to:\n${registerEmail}\n\n` +
-          `Please check your email and click the confirmation link to complete your registration.\n\n` +
-          `After confirming, you'll be able to login.`
-        );
-        
-        // Optionally: Redirect to login or show a pending verification screen
-        // For now, just clear the form and reset to login view
-        setShowProfileSetup(false);
-      }
-    } catch (err: any) {
-      console.error('❌ Signup failed:', err);
-      throw err;
-    }
-  };
-
-  const handleProfileComplete = async (profileData: Partial<User>) => {
-    try {
-      if (!user?.email) return;
-
-      console.log('💾 Updating profile in Supabase...');
-
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.user?.id) throw new Error('No authenticated user');
-
-      // Update the profiles table
-      const { error } = await supabase
+    // Self-heal
+    if (!profile) {
+      const { data } = await supabase
         .from('profiles')
-        .update({
-          name: profileData.name,
-          surname: profileData.surname,
-          preferred_team: profileData.preferredTeam,
-          updated_at: new Date()
-        })
-        .eq('id', session.session.user.id);
+        .upsert({ id: userId, email, name: 'User', surname: '', updated_at: new Date() }, { onConflict: 'id' })
+        .select().maybeSingle();
+      profile = data;
+    }
 
-      if (error) throw error;
+    if (!profile) throw new Error('Could not load profile');
 
-      console.log('✅ Profile updated successfully');
+    // Buscar grupos do user
+    const { data: groupMemberships } = await supabase
+      .from('user_groups')
+      .select('group_id')
+      .eq('user_id', userId)
+      .eq('is_active', true);
 
-      const completeUser = { ...user, ...profileData, groupIds: [] } as User;
-      setUser(completeUser);
-      localStorage.setItem('wc_user', JSON.stringify(completeUser));
-      setShowProfileSetup(false);
-      setActiveTab('groups');
-    } catch (err) {
-      console.error('❌ Profile update failed:', err);
-      throw err;
+    const groupIds = groupMemberships?.map((m: any) => m.group_id) || [];
+
+    const loggedUser: User = {
+      id:            userId,
+      email:         profile.email,
+      name:          profile.name || 'User',
+      surname:       profile.surname || '',
+      preferredTeam: profile.preferred_team || '',
+      groupIds,
+      predictions:   {},
+    };
+
+    setUser(loggedUser);
+    if (groupIds.length > 0) setActiveGroupId(groupIds[0]);
+    return loggedUser;
+  };
+
+  // ── Login ─────────────────────────────────────────────────────────────────
+  const handleLogin = async (loginEmail: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
+    if (error) throw error;
+    if (data?.user?.id) await loadUserProfile(data.user.id, loginEmail);
+  };
+
+  // ── Register ──────────────────────────────────────────────────────────────
+  const handleRegister = async (registerEmail: string, password: string) => {
+    const { data, error } = await supabase.auth.signUp({ email: registerEmail, password });
+    if (error) throw error;
+    if (!data?.user?.id) throw new Error('Signup failed');
+
+    if (data.session) {
+      // Email confirmation desligado (dev mode)
+      await loadUserProfile(data.user.id, registerEmail);
+      setShowProfileSetup(true);
+    } else {
+      // Email confirmation ligado (prod mode)
+      alert(`✅ Registo bem-sucedido!\n\nVerifica o teu email: ${registerEmail}\nClica no link para confirmar o registo.`);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('wc_user');
+  // ── Profile complete ──────────────────────────────────────────────────────
+  const handleProfileComplete = async (profileData: Partial<User>) => {
+    if (!user?.id) return;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ name: profileData.name, surname: profileData.surname, preferred_team: profileData.preferredTeam, updated_at: new Date() })
+      .eq('id', user.id);
+    if (error) throw error;
+
+    setUser(prev => prev ? { ...prev, ...profileData } : prev);
+    setShowProfileSetup(false);
+    setActiveTab('groups');
+  };
+
+  // ── Logout ────────────────────────────────────────────────────────────────
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setActiveGroupId(null);
+    setCurrentGroup(null);
   };
 
-  const updatePrediction = (matchId: string, pred: Prediction) => {
-    if (!user) return;
-    const updatedUser = {
-      ...user,
-      predictions: {
-        ...user.predictions,
-        [matchId]: pred
-      }
-    };
-    setUser(updatedUser);
-    localStorage.setItem('wc_user', JSON.stringify(updatedUser));
-    
-    const users = JSON.parse(localStorage.getItem('wc_users_db') || '[]');
-    const index = users.findIndex((u: any) => u.email === user.email);
-    if (index !== -1) {
-      users[index] = updatedUser;
-      localStorage.setItem('wc_users_db', JSON.stringify(users));
-    }
+  // ── Groups ────────────────────────────────────────────────────────────────
+  const handleCreateGroup = async (newGroup: Group) => {
+    if (!user?.id) return;
+    const { data, error } = await supabase.from('groups').insert({
+      code:             newGroup.code,
+      name:             newGroup.name,
+      description:      newGroup.description,
+      initials:         newGroup.initials,
+      language_default: newGroup.languageDefault,
+      owner_user_id:    user.id,
+      is_private:       newGroup.isPrivate,
+    }).select().single();
+    if (error) throw error;
+
+    await supabase.from('user_groups').insert({ user_id: user.id, group_id: data.id, role: 'OWNER' });
+    setUser(prev => prev ? { ...prev, groupIds: [...prev.groupIds, data.id] } : prev);
+    setActiveGroupId(data.id);
   };
 
-  const handleCreateGroup = (newGroup: Group) => {
-    if (!user) return;
-    
-    const allGroups = JSON.parse(localStorage.getItem('wc_groups_db') || '[]');
-    allGroups.push(newGroup);
-    localStorage.setItem('wc_groups_db', JSON.stringify(allGroups));
-
-    const membership: UserGroup = {
-      id: `ug_${Date.now()}`,
-      userId: user.email,
-      groupId: newGroup.id,
-      role: 'OWNER',
-      joinedAt: Date.now(),
-      isActive: true
-    };
-    const memberships = JSON.parse(localStorage.getItem('wc_memberships_db') || '[]');
-    memberships.push(membership);
-    localStorage.setItem('wc_memberships_db', JSON.stringify(memberships));
-
-    const updatedUser = {
-      ...user,
-      groupIds: [...user.groupIds, newGroup.id]
-    };
-    setUser(updatedUser);
-    localStorage.setItem('wc_user', JSON.stringify(updatedUser));
-    
-    const users = JSON.parse(localStorage.getItem('wc_users_db') || '[]');
-    const index = users.findIndex((u: any) => u.email === user.email);
-    if (index !== -1) {
-      users[index] = updatedUser;
-      localStorage.setItem('wc_users_db', JSON.stringify(users));
-    }
-
-    setActiveGroupId(newGroup.id);
-  };
-
-  const handleJoinGroup = (groupId: string) => {
-    if (!user) return;
-    if (user.groupIds.includes(groupId)) return;
-    
-    const membership: UserGroup = {
-      id: `ug_${Date.now()}`,
-      userId: user.email,
-      groupId: groupId,
-      role: 'MEMBER',
-      joinedAt: Date.now(),
-      isActive: true
-    };
-    const memberships = JSON.parse(localStorage.getItem('wc_memberships_db') || '[]');
-    memberships.push(membership);
-    localStorage.setItem('wc_memberships_db', JSON.stringify(memberships));
-
-    const updatedUser = {
-      ...user,
-      groupIds: [...user.groupIds, groupId]
-    };
-    setUser(updatedUser);
-    localStorage.setItem('wc_user', JSON.stringify(updatedUser));
+  const handleJoinGroup = async (groupId: string) => {
+    if (!user?.id || user.groupIds.includes(groupId)) return;
+    await supabase.from('user_groups').insert({ user_id: user.id, group_id: groupId, role: 'MEMBER' });
+    setUser(prev => prev ? { ...prev, groupIds: [...prev.groupIds, groupId] } : prev);
     setActiveGroupId(groupId);
     setActiveTab('matches');
-
-    const users = JSON.parse(localStorage.getItem('wc_users_db') || '[]');
-    const index = users.findIndex((u: any) => u.email === user.email);
-    if (index !== -1) {
-      users[index] = updatedUser;
-      localStorage.setItem('wc_users_db', JSON.stringify(users));
-    }
   };
 
-  const currentGroup = JSON.parse(localStorage.getItem('wc_groups_db') || '[]').find((g: Group) => g.id === activeGroupId);
-
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50 pb-32 flex flex-col">
       <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50 px-4 py-3 flex justify-between items-center border-b border-slate-100">
         <div className="flex items-center gap-3">
           <div className="relative w-10 h-10 flex items-center justify-center cursor-pointer" onClick={() => setActiveTab('matches')}>
-             <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-red-500 to-green-600 rounded-lg rotate-3 shadow-lg opacity-80"></div>
-             <div className="relative bg-white rounded-lg w-9 h-9 flex items-center justify-center text-slate-900 shadow-sm border border-slate-100">
-               <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-blue-600" stroke="currentColor" strokeWidth="2.5">
-                 <circle cx="12" cy="12" r="10" />
-                 <path d="M12 2a10 10 0 0 1 10 10M12 22a10 10 0 0 1-10-10" stroke="red" strokeWidth="1.5"/>
-                 <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.2"/>
-                 <path d="M12 2v20M2 12h20" stroke="green" strokeWidth="1" strokeDasharray="2 2"/>
-               </svg>
-             </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-red-500 to-green-600 rounded-lg rotate-3 shadow-lg opacity-80"></div>
+            <div className="relative bg-white rounded-lg w-9 h-9 flex items-center justify-center text-slate-900 shadow-sm border border-slate-100">
+              <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-blue-600" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 2a10 10 0 0 1 10 10M12 22a10 10 0 0 1-10-10" stroke="red" strokeWidth="1.5"/>
+                <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.2"/>
+                <path d="M12 2v20M2 12h20" stroke="green" strokeWidth="1" strokeDasharray="2 2"/>
+              </svg>
+            </div>
           </div>
           <div>
             <h1 className="font-black text-xl tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-red-600">BOLÃO</h1>
@@ -504,22 +250,18 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <select 
-            value={lang} 
-            onChange={(e) => setLang(e.target.value as Language)}
+          <select
+            value={lang}
+            onChange={e => setLang(e.target.value as Language)}
             className="text-xs font-bold bg-slate-100 border-none rounded-full px-3 py-1.5 outline-none cursor-pointer hover:bg-slate-200 transition appearance-none text-center"
           >
             <option value="pt">PT</option>
             <option value="en">EN</option>
             <option value="es">ES</option>
           </select>
-          
+
           {user && (
-            <button 
-              onClick={handleLogout}
-              className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-              title={t.logout}
-            >
+            <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title={t.logout}>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
@@ -530,19 +272,12 @@ const App: React.FC = () => {
 
       <main className={`flex-1 ${!user && !showProfileSetup ? '' : 'max-w-xl mx-auto px-4 mt-6 w-full'}`}>
         {!user && !showProfileSetup && (
-          <Login 
-            lang={lang} 
-            onLogin={handleLogin} 
-            onRegister={handleRegister} 
-          />
+          <Login lang={lang} onLogin={handleLogin} onRegister={handleRegister} />
         )}
 
         {showProfileSetup && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <ProfileSetup 
-              lang={lang} 
-              onComplete={handleProfileComplete} 
-            />
+            <ProfileSetup lang={lang} onComplete={handleProfileComplete} />
           </div>
         )}
 
@@ -551,28 +286,22 @@ const App: React.FC = () => {
             {activeTab === 'matches' && (
               <>
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 overflow-hidden relative">
-                  <div className="absolute top-0 right-0 p-4 opacity-5">
-                    <svg className="w-24 h-24 rotate-12" fill="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" />
-                    </svg>
-                  </div>
                   <div className="flex items-center gap-5 relative z-10">
                     <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl overflow-hidden shadow-inner border border-blue-200/50">
-                      {user.photo ? (
-                        <img src={user.photo} alt="Avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        <span>{user.name?.[0]}{user.surname?.[0]}</span>
-                      )}
+                      {user.photo
+                        ? <img src={user.photo} alt="Avatar" className="w-full h-full object-cover" />
+                        : <span>{user.name?.[0]}{user.surname?.[0]}</span>
+                      }
                     </div>
                     <div>
                       <h2 className="text-xl font-black text-slate-800 tracking-tight">{t.welcome}, {user.name}!</h2>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-widest border border-slate-200/50">
-                          Squad: {user.preferredTeam}
+                          {user.preferredTeam}
                         </span>
-                        {activeGroupId && (
+                        {currentGroup && (
                           <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-100">
-                            {currentGroup?.name}
+                            {currentGroup.name}
                           </span>
                         )}
                       </div>
@@ -583,43 +312,27 @@ const App: React.FC = () => {
                 {user.groupIds.length === 0 ? (
                   <div className="bg-blue-50 border border-blue-100 p-8 rounded-[2.5rem] text-center">
                     <h3 className="text-blue-800 font-black mb-2 uppercase tracking-tight">{t.noGroups}</h3>
-                    <button 
-                      onClick={() => setActiveTab('groups')}
-                      className="bg-blue-600 text-white font-black px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/20"
-                    >
+                    <button onClick={() => setActiveTab('groups')} className="bg-blue-600 text-white font-black px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/20">
                       {t.joinGroup}
                     </button>
                   </div>
                 ) : (
-                  <MatchList 
-                    lang={lang} 
-                    groupId={activeGroupId} 
-                  />
+                  <MatchList lang={lang} groupId={activeGroupId} />
                 )}
               </>
             )}
 
             {activeTab === 'ranking' && (
-              <Leaderboard 
-                lang={lang} 
-                matches={MOCK_MATCHES} 
-                groupId={activeGroupId} 
-              />
+              <Leaderboard lang={lang} groupId={activeGroupId} />
             )}
 
             {activeTab === 'groups' && !viewingGroupDashboard && (
-              <GroupSelector 
-                lang={lang} 
-                userGroupIds={user.groupIds} 
+              <GroupSelector
+                lang={lang}
+                userGroupIds={user.groupIds}
                 activeGroupId={activeGroupId}
                 currentUserEmail={user.email}
-                onSelectGroup={(id) => {
-                  console.log('🔍 Group selected:', id);
-                  console.log('🔍 Current user:', user);
-                  console.log('🔍 User ID:', user.id);
-                  setActiveGroupId(id);
-                  setViewingGroupDashboard(true);
-                }}
+                onSelectGroup={id => { setActiveGroupId(id); setViewingGroupDashboard(true); }}
                 onJoinGroup={handleJoinGroup}
                 onCreateGroup={handleCreateGroup}
               />
@@ -630,29 +343,9 @@ const App: React.FC = () => {
                 lang={lang}
                 groupId={activeGroupId}
                 currentUserId={user.id || 'unknown'}
-                onNavigateToMatches={() => {
-                  setViewingGroupDashboard(false);
-                  setActiveTab('matches');
-                }}
+                onNavigateToMatches={() => { setViewingGroupDashboard(false); setActiveTab('matches'); }}
                 onBack={() => setViewingGroupDashboard(false)}
               />
-            )}
-
-            {/* DIAGNOSTIC: Fallback for edge cases */}
-            {activeTab === 'groups' && viewingGroupDashboard && !activeGroupId && (
-              <div className="bg-yellow-50 border-2 border-yellow-500 rounded-2xl p-8 text-center">
-                <p className="text-yellow-800 font-bold text-lg">⚠️ DEBUG: No Active Group ID</p>
-                <p className="text-yellow-600 text-sm mt-2">viewingGroupDashboard is true but activeGroupId is missing</p>
-                <button 
-                  onClick={() => {
-                    console.log('🔧 Resetting to groups list');
-                    setViewingGroupDashboard(false);
-                  }}
-                  className="mt-4 bg-yellow-500 text-white px-6 py-2 rounded-xl font-bold"
-                >
-                  Reset to Groups List
-                </button>
-              </div>
             )}
 
             {activeTab === 'rules' && (
@@ -664,46 +357,29 @@ const App: React.FC = () => {
 
       {user && !showProfileSetup && (
         <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-sm bg-white/90 backdrop-blur-xl border border-slate-200 rounded-3xl shadow-2xl p-1.5 flex gap-1 z-50">
-          <button 
-            onClick={() => setActiveTab('matches')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-2xl text-[9px] font-black transition-all ${activeTab === 'matches' ? 'bg-slate-900 text-white shadow-lg scale-105' : 'text-slate-400 hover:bg-slate-50'}`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            {t.matches.toUpperCase()}
-          </button>
-          <button 
-            onClick={() => setActiveTab('ranking')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-2xl text-[9px] font-black transition-all ${activeTab === 'ranking' ? 'bg-slate-900 text-white shadow-lg scale-105' : 'text-slate-400 hover:bg-slate-50'}`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            {t.ranking.toUpperCase()}
-          </button>
-          <button 
-            onClick={() => {
-              console.log('📱 Groups tab clicked');
-              setViewingGroupDashboard(false); // Reset to list view when clicking tab
-              setActiveTab('groups');
-            }}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-2xl text-[9px] font-black transition-all ${activeTab === 'groups' ? 'bg-slate-900 text-white shadow-lg scale-105' : 'text-slate-400 hover:bg-slate-50'}`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            {t.groups.toUpperCase()}
-          </button>
-          <button 
-            onClick={() => setActiveTab('rules')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-2xl text-[9px] font-black transition-all ${activeTab === 'rules' ? 'bg-slate-900 text-white shadow-lg scale-105' : 'text-slate-400 hover:bg-slate-50'}`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {t.rules.toUpperCase()}
-          </button>
+          {(['matches', 'ranking', 'groups', 'rules'] as const).map(tab => {
+            const icons: Record<string, string> = {
+              matches: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+              ranking: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+              groups:  'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+              rules:   'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+            };
+            const labels: Record<string, string> = {
+              matches: t.matches, ranking: t.ranking, groups: t.groups, rules: t.rules,
+            };
+            return (
+              <button
+                key={tab}
+                onClick={() => { if (tab === 'groups') setViewingGroupDashboard(false); setActiveTab(tab); }}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-2xl text-[9px] font-black transition-all ${activeTab === tab ? 'bg-slate-900 text-white shadow-lg scale-105' : 'text-slate-400 hover:bg-slate-50'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d={icons[tab]} />
+                </svg>
+                {labels[tab].toUpperCase()}
+              </button>
+            );
+          })}
         </nav>
       )}
     </div>
