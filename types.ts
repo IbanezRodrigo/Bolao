@@ -1,18 +1,29 @@
+// ============================================================================
+// BOLÃO FIFA 2026 — TYPES v2.0
+// ============================================================================
 
-export type Language = 'pt' | 'en' | 'es';
-export type GroupRole = 'OWNER' | 'ADMIN' | 'MEMBER';
+export type Language   = 'pt' | 'en' | 'es';
+export type GroupRole  = 'OWNER' | 'ADMIN' | 'MEMBER';
+export type MatchPhase = 'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL';
+export type MatchStatus = 'SCHEDULED' | 'LIVE' | 'FINISHED' | 'CANCELLED';
 
+// ----------------------------------------------------------------------------
+// USER / PROFILE
+// ----------------------------------------------------------------------------
 export interface User {
-  id?: string; // Supabase user ID
+  id?: string;
   email: string;
   name: string;
   surname: string;
   photo?: string;
   preferredTeam: string;
   predictions: Record<string, Prediction>;
-  groupIds: string[]; // List of IDs of groups the user belongs to
+  groupIds: string[];
 }
 
+// ----------------------------------------------------------------------------
+// GROUP
+// ----------------------------------------------------------------------------
 export interface Group {
   id: string;
   code: string;
@@ -22,10 +33,10 @@ export interface Group {
   initials: string;
   languageDefault: Language;
   ownerUserId: string;
-  createdAt: number;
-  updatedAt: number;
   isPrivate: boolean;
   status: 'ACTIVE' | 'ARCHIVED';
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface UserGroup {
@@ -37,13 +48,9 @@ export interface UserGroup {
   isActive: boolean;
 }
 
-export interface Prediction {
-  homeScore: number;
-  awayScore: number;
-  timestamp: number;
-  isJoker?: boolean;
-}
-
+// ----------------------------------------------------------------------------
+// TEAM
+// ----------------------------------------------------------------------------
 export interface Team {
   id: string;
   name: Record<Language, string>;
@@ -51,25 +58,76 @@ export interface Team {
   color: string;
 }
 
+// ----------------------------------------------------------------------------
+// MATCH
+// ----------------------------------------------------------------------------
 export interface Match {
   id: string;
   homeTeam: Team;
   awayTeam: Team;
-  startTime: string; // ISO format
+  startTime: string;       // ISO format
   venue: string;
-  group: string;
+  group: string;           // 'A', 'B', ... ou 'R16', 'QF', etc.
+  phase: MatchPhase;       // NOVO: para multiplicador de pontos
   actualHomeScore?: number;
   actualAwayScore?: number;
-  status?: string; // SCHEDULED, TIMED, IN_PLAY, PAUSED, FINISHED, etc.
+  status: MatchStatus;
+  externalId?: string;     // ID da API externa
 }
 
+// ----------------------------------------------------------------------------
+// PREDICTION
+// ----------------------------------------------------------------------------
+export interface Prediction {
+  homeScore: number;
+  awayScore: number;
+  timestamp: number;       // submitted_at para desempate
+  isJoker?: boolean;
+
+  // Pontuação calculada (preenchida após jogo terminar)
+  ptsExactScore?: number;  // 10 pts
+  ptsWinner?: number;      // 5 pts
+  ptsGoalDiff?: number;    // 3 pts
+  ptsOneTeam?: number;     // 1 pt
+  ptsTotalBase?: number;   // soma base
+  ptsMultiplier?: number;  // fator da fase
+  ptsFinal?: number;       // total final
+}
+
+// ----------------------------------------------------------------------------
+// SCORING
+// ----------------------------------------------------------------------------
 export interface ScoringConfig {
-  exact: number;
-  diff: number;
-  outcome: number;
-  oneScore: number;
+  exactScore:   number;   // 10
+  winner:       number;   // 5
+  correctDraw:  number;   // 5
+  goalDiff:     number;   // 3
+  oneTeamScore: number;   // 1
+  multGroup:    number;   // 1.0
+  multR16:      number;   // 1.2
+  multQF:       number;   // 1.4
+  multSF:       number;   // 1.6
+  multFinal:    number;   // 2.0
 }
 
+// ----------------------------------------------------------------------------
+// LEADERBOARD
+// ----------------------------------------------------------------------------
+export interface LeaderboardEntry {
+  userId:              string;
+  name:                string;
+  surname:             string;
+  photoUrl?:           string;
+  totalPoints:         number;
+  exactCount:          number;
+  winnerCount:         number;
+  totalPredictions:    number;
+  avgSubmissionOffset: number;
+}
+
+// ----------------------------------------------------------------------------
+// TRANSLATIONS
+// ----------------------------------------------------------------------------
 export interface Translations {
   login: string;
   register: string;
