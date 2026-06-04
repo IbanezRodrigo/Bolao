@@ -50,10 +50,10 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
 
   const t = TRANSLATIONS[lang];
 
-  // Fetch groups from Supabase on component mount
-  useEffect(() => {
-    fetchGroups();
-  }, []);
+// Fetch groups quando userGroupIds muda (ex: após criar/entrar num grupo)
+useEffect(() => {
+  fetchGroups();
+}, [userGroupIds.length]);
 
   const fetchGroups = async () => {
     try {
