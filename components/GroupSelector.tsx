@@ -413,12 +413,12 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
           <span className="text-[10px] font-bold text-blue-400 block mt-4 group-hover:underline">Clique para copiar</span>
         </div>
 
-        <button 
-          onClick={() => setView('list')}
-          className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl transition transform active:scale-95"
-        >
-          Ir para Meus Grupos
-        </button>
+<button 
+  onClick={() => { fetchGroups(); setView('list'); }}
+  className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl transition transform active:scale-95"
+>
+  Ir para Meus Grupos
+</button>
       </div>
     );
   }
