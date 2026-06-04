@@ -95,7 +95,7 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
 
       // Fetch leaderboard from view
       const { data: leaderboardData, error: leaderboardError } = await supabase
-        .from('group_leaderboard')
+        .from('leaderboard')
         .select('*')
         .eq('group_id', groupId)
         .order('total_points', { ascending: false });
