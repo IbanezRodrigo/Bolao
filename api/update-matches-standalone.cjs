@@ -68,7 +68,7 @@ async function syncMatches() {
 
     console.log('📡 Fetching matches from football-data.org (CL)...');
     const response = await fetch(
-      'https://api.football-data.org/v4/competitions/CL/matches',
+      'https://api.football-data.org/v4/competitions/WC/matches',
       { headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY } }
     );
 
