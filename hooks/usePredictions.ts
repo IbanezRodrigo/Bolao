@@ -17,48 +17,41 @@ interface DBPrediction {
   home_score: number;
   away_score: number;
   is_joker: boolean;
+  pts_exact_score: number;
+  pts_winner: number;
+  pts_goal_diff: number;
+  pts_one_team: number;
+  pts_total_base: number;
+  pts_multiplier: number;
+  pts_final: number;
+  submitted_at: string;
   created_at: string;
   updated_at: string;
 }
 
-/**
- * Custom hook to manage predictions for a specific group
- * 
- * Fetches existing predictions for the current user in the given group
- * Provides a function to submit/update predictions
- * 
- * @param groupId - The ID of the group to fetch predictions for
- * @returns { predictions, loading, error, submitPrediction }
- */
 export const usePredictions = (groupId: string): UsePredictionsReturn => {
   const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!groupId) {
-      setLoading(false);
-      return;
-    }
+    if (!groupId) { setLoading(false); return; }
 
     const fetchPredictions = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Get current authenticated user
         const { data: session } = await supabase.auth.getSession();
-        
-        if (!session?.session?.user?.id) {
-          console.warn('⚠️ No authenticated user found');
+        const userId = session?.session?.user?.id;
+
+        if (!userId) {
+          console.warn('⚠️ No authenticated user');
           setPredictions({});
           setLoading(false);
           return;
         }
 
-        const userId = session.session.user.id;
-
-        // Fetch predictions for this user + group
         const { data, error: fetchError } = await supabase
           .from('predictions')
           .select('*')
@@ -71,29 +64,31 @@ export const usePredictions = (groupId: string): UsePredictionsReturn => {
           return;
         }
 
-        if (!data) {
-          setPredictions({});
-          return;
-        }
+        if (!data) { setPredictions({}); return; }
 
-        // Transform DB data (snake_case) to Frontend format (camelCase)
-        // Create map: { matchId: { homeScore, awayScore, timestamp, isJoker } }
-        const predictionsMap: Record<string, Prediction> = {};
-        
-        data.forEach((dbPred: DBPrediction) => {
-          predictionsMap[dbPred.match_id] = {
-            homeScore: dbPred.home_score,
-            awayScore: dbPred.away_score,
-            timestamp: new Date(dbPred.updated_at).getTime(),
-            isJoker: dbPred.is_joker
+        const map: Record<string, Prediction> = {};
+        data.forEach((d: DBPrediction) => {
+          map[d.match_id] = {
+            homeScore:     d.home_score,
+            awayScore:     d.away_score,
+            timestamp:     new Date(d.submitted_at).getTime(),
+            isJoker:       d.is_joker,
+            // Pontuação calculada
+            ptsExactScore: d.pts_exact_score,
+            ptsWinner:     d.pts_winner,
+            ptsGoalDiff:   d.pts_goal_diff,
+            ptsOneTeam:    d.pts_one_team,
+            ptsTotalBase:  d.pts_total_base,
+            ptsMultiplier: d.pts_multiplier,
+            ptsFinal:      d.pts_final,
           };
         });
 
         console.log(`✅ Fetched ${data.length} predictions for group ${groupId}`);
-        setPredictions(predictionsMap);
+        setPredictions(map);
       } catch (err: any) {
-        console.error('❌ Unexpected error fetching predictions:', err);
-        setError(err.message || 'Unknown error occurred');
+        console.error('❌ Unexpected error:', err);
+        setError(err.message || 'Unknown error');
       } finally {
         setLoading(false);
       }
@@ -102,42 +97,33 @@ export const usePredictions = (groupId: string): UsePredictionsReturn => {
     fetchPredictions();
   }, [groupId]);
 
-  /**
-   * Submit or update a prediction
-   * Uses UPSERT to handle both new predictions and updates
-   */
   const submitPrediction = async (
-    matchId: string, 
-    homeScore: number, 
+    matchId: string,
+    homeScore: number,
     awayScore: number,
     isJoker: boolean = false
   ): Promise<void> => {
     try {
-      // Get current authenticated user
       const { data: session } = await supabase.auth.getSession();
-      
-      if (!session?.session?.user?.id) {
-        throw new Error('No authenticated user found');
-      }
+      const userId = session?.session?.user?.id;
+      if (!userId) throw new Error('No authenticated user');
 
-      const userId = session.session.user.id;
+      const now = new Date().toISOString();
 
-      // Upsert prediction (insert or update if exists)
       const { error: upsertError } = await supabase
         .from('predictions')
         .upsert(
           {
-            user_id: userId,
-            group_id: groupId,
-            match_id: matchId,
-            home_score: homeScore,
-            away_score: awayScore,
-            is_joker: isJoker,
-            updated_at: new Date().toISOString()
+            user_id:      userId,
+            group_id:     groupId,
+            match_id:     matchId,
+            home_score:   homeScore,
+            away_score:   awayScore,
+            is_joker:     isJoker,
+            submitted_at: now,
+            updated_at:   now,
           },
-          { 
-            onConflict: 'user_id,group_id,match_id' // Unique constraint
-          }
+          { onConflict: 'user_id,group_id,match_id' }
         );
 
       if (upsertError) {
@@ -145,18 +131,25 @@ export const usePredictions = (groupId: string): UsePredictionsReturn => {
         throw upsertError;
       }
 
-      // Update local state optimistically
+      // Atualiza estado local otimisticamente
       setPredictions(prev => ({
         ...prev,
         [matchId]: {
           homeScore,
           awayScore,
           timestamp: Date.now(),
-          isJoker
-        }
+          isJoker,
+          ptsExactScore: 0,
+          ptsWinner: 0,
+          ptsGoalDiff: 0,
+          ptsOneTeam: 0,
+          ptsTotalBase: 0,
+          ptsMultiplier: 1.0,
+          ptsFinal: 0,
+        },
       }));
 
-      console.log(`✅ Prediction saved for match ${matchId}: ${homeScore}-${awayScore}`);
+      console.log(`✅ Prediction saved: ${matchId} → ${homeScore}-${awayScore}`);
     } catch (err: any) {
       console.error('❌ Failed to submit prediction:', err);
       throw err;
