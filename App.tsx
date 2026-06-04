@@ -200,30 +200,30 @@ const App: React.FC = () => {
 
   // ── Groups ────────────────────────────────────────────────────────────────
   const handleCreateGroup = async (newGroup: Group) => {
-    if (!user?.id) return;
-    const { data, error } = await supabase.from('groups').insert({
-      code:             newGroup.code,
-      name:             newGroup.name,
-      description:      newGroup.description,
-      initials:         newGroup.initials,
-      language_default: newGroup.languageDefault,
-      owner_user_id:    user.id,
-      is_private:       newGroup.isPrivate,
-    }).select().single();
-    if (error) throw error;
+  if (!user?.id) return;
+  const { data, error } = await supabase.from('groups').insert({
+    code:             newGroup.code,
+    name:             newGroup.name,
+    description:      newGroup.description,
+    initials:         newGroup.initials,
+    language_default: newGroup.languageDefault,
+    owner_user_id:    user.id,
+    is_private:       newGroup.isPrivate,
+  }).select().single();
+  if (error) throw error;
 
-    await supabase.from('user_groups').insert({ user_id: user.id, group_id: data.id, role: 'OWNER' });
-    setUser(prev => prev ? { ...prev, groupIds: [...prev.groupIds, data.id] } : prev);
-    setActiveGroupId(data.id);
-  };
+  await supabase.from('user_groups').insert({ 
+    user_id: user.id, 
+    group_id: data.id, 
+    role: 'OWNER' 
+  });
 
-  const handleJoinGroup = async (groupId: string) => {
-    if (!user?.id || user.groupIds.includes(groupId)) return;
-    await supabase.from('user_groups').insert({ user_id: user.id, group_id: groupId, role: 'MEMBER' });
-    setUser(prev => prev ? { ...prev, groupIds: [...prev.groupIds, groupId] } : prev);
-    setActiveGroupId(groupId);
-    setActiveTab('matches');
-  };
+  // FIX: atualiza estado local imediatamente
+  const updatedGroupIds = [...user.groupIds, data.id];
+  setUser(prev => prev ? { ...prev, groupIds: updatedGroupIds } : prev);
+  setActiveGroupId(data.id);
+  setActiveTab('matches'); // vai para jogos automaticamente
+};
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
