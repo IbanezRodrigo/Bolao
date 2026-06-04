@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Language, Prediction, Group, UserGroup, ScoringConfig } from './types';
+import { User, Language, Group, ScoringConfig } from './types';
 import { TRANSLATIONS, SCORING_RULES as INITIAL_SCORING_RULES } from './constants';
 import Login from './components/Auth';
 import MatchList from './components/MatchList';
@@ -22,7 +22,7 @@ const App: React.FC = () => {
 
   const t = TRANSLATIONS[lang];
 
-  // ── Fetch scoring rules do Supabase (novo schema v2) ─────────────────────
+  // ── Fetch scoring rules ───────────────────────────────────────────────────
   useEffect(() => {
     const fetchScoringRules = async () => {
       try {
@@ -31,9 +31,7 @@ const App: React.FC = () => {
           .select('exact_score, winner, correct_draw, goal_diff, one_team_score, mult_group, mult_r16, mult_qf, mult_sf, mult_final')
           .eq('id', 'current')
           .single();
-
         if (error) throw error;
-
         if (data) {
           setScoringRules({
             exactScore:   data.exact_score,
@@ -54,39 +52,26 @@ const App: React.FC = () => {
         setScoringRules(INITIAL_SCORING_RULES);
       }
     };
-
     fetchScoringRules();
   }, []);
 
   // ── Fetch grupo ativo ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!activeGroupId) { setCurrentGroup(null); return; }
-
     const fetchGroup = async () => {
-      const { data, error } = await supabase
-        .from('groups')
-        .select('*')
-        .eq('id', activeGroupId)
-        .single();
-
+      const { data, error } = await supabase.from('groups').select('*').eq('id', activeGroupId).single();
       if (!error && data) {
         setCurrentGroup({
-          id:              data.id,
-          code:            data.code,
-          name:            data.name,
-          description:     data.description,
-          photoUrl:        data.photo_url,
-          initials:        data.initials,
-          languageDefault: data.language_default,
-          ownerUserId:     data.owner_user_id,
-          isPrivate:       data.is_private,
-          status:          data.status,
-          createdAt:       new Date(data.created_at).getTime(),
-          updatedAt:       new Date(data.updated_at).getTime(),
+          id: data.id, code: data.code, name: data.name,
+          description: data.description, photoUrl: data.photo_url,
+          initials: data.initials, languageDefault: data.language_default,
+          ownerUserId: data.owner_user_id, isPrivate: data.is_private,
+          status: data.status,
+          createdAt: new Date(data.created_at).getTime(),
+          updatedAt: new Date(data.updated_at).getTime(),
         });
       }
     };
-
     fetchGroup();
   }, [activeGroupId]);
 
@@ -99,15 +84,21 @@ const App: React.FC = () => {
       }
     };
     restoreSession();
-
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setActiveGroupId(null);
-      }
+      if (event === 'SIGNED_OUT') { setUser(null); setActiveGroupId(null); }
     });
     return () => listener?.subscription?.unsubscribe();
   }, []);
+
+  // ── Helper: recarregar grupos do user ────────────────────────────────────
+  const reloadUserGroups = async (userId: string): Promise<string[]> => {
+    const { data } = await supabase
+      .from('user_groups')
+      .select('group_id')
+      .eq('user_id', userId)
+      .eq('is_active', true);
+    return data?.map((m: any) => m.group_id) || [];
+  };
 
   // ── Helper: carregar profile ──────────────────────────────────────────────
   const loadUserProfile = async (userId: string, email: string) => {
@@ -117,8 +108,6 @@ const App: React.FC = () => {
       if (data) { profile = data; break; }
       await new Promise(r => setTimeout(r, 200 * (i + 1)));
     }
-
-    // Self-heal
     if (!profile) {
       const { data } = await supabase
         .from('profiles')
@@ -126,28 +115,16 @@ const App: React.FC = () => {
         .select().maybeSingle();
       profile = data;
     }
-
     if (!profile) throw new Error('Could not load profile');
 
-    // Buscar grupos do user
-    const { data: groupMemberships } = await supabase
-      .from('user_groups')
-      .select('group_id')
-      .eq('user_id', userId)
-      .eq('is_active', true);
-
-    const groupIds = groupMemberships?.map((m: any) => m.group_id) || [];
+    const groupIds = await reloadUserGroups(userId);
 
     const loggedUser: User = {
-      id:            userId,
-      email:         profile.email,
-      name:          profile.name || 'User',
-      surname:       profile.surname || '',
+      id: userId, email: profile.email,
+      name: profile.name || 'User', surname: profile.surname || '',
       preferredTeam: profile.preferred_team || '',
-      groupIds,
-      predictions:   {},
+      groupIds, predictions: {},
     };
-
     setUser(loggedUser);
     if (groupIds.length > 0) setActiveGroupId(groupIds[0]);
     return loggedUser;
@@ -165,13 +142,10 @@ const App: React.FC = () => {
     const { data, error } = await supabase.auth.signUp({ email: registerEmail, password });
     if (error) throw error;
     if (!data?.user?.id) throw new Error('Signup failed');
-
     if (data.session) {
-      // Email confirmation desligado (dev mode)
       await loadUserProfile(data.user.id, registerEmail);
       setShowProfileSetup(true);
     } else {
-      // Email confirmation ligado (prod mode)
       alert(`✅ Registo bem-sucedido!\n\nVerifica o teu email: ${registerEmail}\nClica no link para confirmar o registo.`);
     }
   };
@@ -184,7 +158,6 @@ const App: React.FC = () => {
       .update({ name: profileData.name, surname: profileData.surname, preferred_team: profileData.preferredTeam, updated_at: new Date() })
       .eq('id', user.id);
     if (error) throw error;
-
     setUser(prev => prev ? { ...prev, ...profileData } : prev);
     setShowProfileSetup(false);
     setActiveTab('groups');
@@ -198,41 +171,31 @@ const App: React.FC = () => {
     setCurrentGroup(null);
   };
 
-  // ── Groups ────────────────────────────────────────────────────────────────
-const handleJoinGroup = async (groupId: string) => {
-  if (!user?.id || user.groupIds.includes(groupId)) return;
-  await supabase.from('user_groups').insert({ user_id: user.id, group_id: groupId, role: 'MEMBER' });
-  // Recarregar grupos do Supabase
-  const { data: memberships } = await supabase.from('user_groups').select('group_id').eq('user_id', user.id).eq('is_active', true);
-  const groupIds = memberships?.map((m: any) => m.group_id) || [];
-  setUser(prev => prev ? { ...prev, groupIds } : prev);
-  setActiveGroupId(groupId);
-  setActiveTab('matches');
-};
-  
-const handleCreateGroup = async (newGroup: Group) => {
-  if (!user?.id) return;
-  const { data, error } = await supabase.from('groups').insert({
-    code: newGroup.code, name: newGroup.name,
-    description: newGroup.description, initials: newGroup.initials,
-    language_default: newGroup.languageDefault,
-    owner_user_id: user.id, is_private: newGroup.isPrivate,
-  }).select().single();
-  if (error) throw error;
-  await supabase.from('user_groups').insert({ user_id: user.id, group_id: data.id, role: 'OWNER' });
-  // Recarregar grupos do Supabase
-  const { data: memberships } = await supabase.from('user_groups').select('group_id').eq('user_id', user.id).eq('is_active', true);
-  const groupIds = memberships?.map((m: any) => m.group_id) || [];
-  setUser(prev => prev ? { ...prev, groupIds } : prev);
-  setActiveGroupId(data.id);
-};
+  // ── Criar grupo ───────────────────────────────────────────────────────────
+  const handleCreateGroup = async (newGroup: Group) => {
+    if (!user?.id) return;
+    const { data, error } = await supabase.from('groups').insert({
+      code: newGroup.code, name: newGroup.name,
+      description: newGroup.description, initials: newGroup.initials,
+      language_default: newGroup.languageDefault,
+      owner_user_id: user.id, is_private: newGroup.isPrivate,
+    }).select().single();
+    if (error) throw error;
+    await supabase.from('user_groups').insert({ user_id: user.id, group_id: data.id, role: 'OWNER' });
+    const groupIds = await reloadUserGroups(user.id);
+    setUser(prev => prev ? { ...prev, groupIds } : prev);
+    setActiveGroupId(data.id);
+  };
 
-  // FIX: atualiza estado local imediatamente
-  const updatedGroupIds = [...user.groupIds, data.id];
-  setUser(prev => prev ? { ...prev, groupIds: updatedGroupIds } : prev);
-  setActiveGroupId(data.id);
-  setActiveTab('matches'); // vai para jogos automaticamente
-};
+  // ── Entrar em grupo ───────────────────────────────────────────────────────
+  const handleJoinGroup = async (groupId: string) => {
+    if (!user?.id || user.groupIds.includes(groupId)) return;
+    await supabase.from('user_groups').insert({ user_id: user.id, group_id: groupId, role: 'MEMBER' });
+    const groupIds = await reloadUserGroups(user.id);
+    setUser(prev => prev ? { ...prev, groupIds } : prev);
+    setActiveGroupId(groupId);
+    setActiveTab('matches');
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -257,7 +220,6 @@ const handleCreateGroup = async (newGroup: Group) => {
             </span>
           </div>
         </div>
-
         <div className="flex items-center gap-3">
           <select
             value={lang}
@@ -268,7 +230,6 @@ const handleCreateGroup = async (newGroup: Group) => {
             <option value="en">EN</option>
             <option value="es">ES</option>
           </select>
-
           {user && (
             <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title={t.logout}>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -283,13 +244,11 @@ const handleCreateGroup = async (newGroup: Group) => {
         {!user && !showProfileSetup && (
           <Login lang={lang} onLogin={handleLogin} onRegister={handleRegister} />
         )}
-
         {showProfileSetup && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <ProfileSetup lang={lang} onComplete={handleProfileComplete} />
           </div>
         )}
-
         {user && !showProfileSetup && (
           <div className="space-y-6 animate-in fade-in duration-500">
             {activeTab === 'matches' && (
@@ -317,7 +276,6 @@ const handleCreateGroup = async (newGroup: Group) => {
                     </div>
                   </div>
                 </div>
-
                 {user.groupIds.length === 0 ? (
                   <div className="bg-blue-50 border border-blue-100 p-8 rounded-[2.5rem] text-center">
                     <h3 className="text-blue-800 font-black mb-2 uppercase tracking-tight">{t.noGroups}</h3>
@@ -330,11 +288,9 @@ const handleCreateGroup = async (newGroup: Group) => {
                 )}
               </>
             )}
-
             {activeTab === 'ranking' && (
               <Leaderboard lang={lang} groupId={activeGroupId} />
             )}
-
             {activeTab === 'groups' && !viewingGroupDashboard && (
               <GroupSelector
                 lang={lang}
@@ -346,7 +302,6 @@ const handleCreateGroup = async (newGroup: Group) => {
                 onCreateGroup={handleCreateGroup}
               />
             )}
-
             {activeTab === 'groups' && viewingGroupDashboard && activeGroupId && (
               <GroupDashboard
                 lang={lang}
@@ -356,7 +311,6 @@ const handleCreateGroup = async (newGroup: Group) => {
                 onBack={() => setViewingGroupDashboard(false)}
               />
             )}
-
             {activeTab === 'rules' && (
               <Rules lang={lang} scoringConfig={scoringRules} />
             )}
