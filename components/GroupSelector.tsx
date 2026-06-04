@@ -55,18 +55,34 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
     fetchGroups();
   }, [userGroupIds.join(',')]);
 
-  const fetchGroups = async () => {
-    try {
-      console.log('📡 Fetching groups from Supabase...');
-      const { data, error: fetchError } = await supabase
-        .from('groups')
-        .select('*');
+const fetchGroups = async () => {
+  const { data: session } = await supabase.auth.getSession();
+  const userId = session?.session?.user?.id;
+  if (!userId) return;
 
-      if (fetchError) {
-        console.error('❌ Error fetching groups:', fetchError);
-        setAllGroups([]);
-        return;
-      }
+  const { data, error: fetchError } = await supabase
+    .from('user_groups')
+    .select('groups(*)')
+    .eq('user_id', userId)
+    .eq('is_active', true);
+
+  if (fetchError) { setAllGroups([]); return; }
+
+  const mappedGroups = (data || [])
+    .map((row: any) => row.groups)
+    .filter(Boolean)
+    .map((g: any) => ({
+      id: g.id, code: g.code, name: g.name,
+      description: g.description, photoUrl: g.photo_url,
+      initials: g.initials, languageDefault: g.language_default || 'pt',
+      ownerUserId: g.owner_user_id,
+      createdAt: g.created_at ? new Date(g.created_at).getTime() : 0,
+      updatedAt: g.updated_at ? new Date(g.updated_at).getTime() : 0,
+      isPrivate: g.is_private || false, status: g.status || 'ACTIVE'
+    }));
+
+  setAllGroups(mappedGroups);
+};
 
       // Map snake_case database columns to camelCase TypeScript types
       const mappedGroups = (data || []).map((row: any) => ({
@@ -92,7 +108,7 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
     }
   };
 
-  const myGroups = allGroups.filter(g => userGroupIds.includes(g.id));
+const myGroups = allGroups;
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
