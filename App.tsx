@@ -199,6 +199,19 @@ const App: React.FC = () => {
   };
 
   // ── Groups ────────────────────────────────────────────────────────────────
+  const handleJoinGroup = async (groupId: string) => {
+  if (!user?.id || user.groupIds.includes(groupId)) return;
+  await supabase.from('user_groups').insert({ 
+    user_id: user.id, 
+    group_id: groupId, 
+    role: 'MEMBER' 
+  });
+  const updatedGroupIds = [...user.groupIds, groupId];
+  setUser(prev => prev ? { ...prev, groupIds: updatedGroupIds } : prev);
+  setActiveGroupId(groupId);
+  setActiveTab('matches');
+};
+  
   const handleCreateGroup = async (newGroup: Group) => {
   if (!user?.id) return;
   const { data, error } = await supabase.from('groups').insert({
