@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Match, Language, Prediction } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -14,7 +13,6 @@ interface PredictionModalProps {
 const PredictionModal: React.FC<PredictionModalProps> = ({ lang, match, existingPrediction, onClose, onSave }) => {
   const [homeScore, setHomeScore] = useState(existingPrediction?.homeScore ?? 0);
   const [awayScore, setAwayScore] = useState(existingPrediction?.awayScore ?? 0);
-  const [isJoker, setIsJoker] = useState(existingPrediction?.isJoker ?? false);
 
   const t = TRANSLATIONS[lang];
 
@@ -22,7 +20,6 @@ const PredictionModal: React.FC<PredictionModalProps> = ({ lang, match, existing
     onSave({
       homeScore,
       awayScore,
-      isJoker,
       timestamp: Date.now()
     });
   };
@@ -84,23 +81,6 @@ const PredictionModal: React.FC<PredictionModalProps> = ({ lang, match, existing
                 >+</button>
               </div>
             </div>
-          </div>
-
-          {/* Joker Toggle */}
-          <div className="mb-8 p-4 bg-slate-50 rounded-2xl flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🃏</span>
-              <div>
-                <p className="text-sm font-black text-slate-800">{t.joker}</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">{t.doublePoints}</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setIsJoker(!isJoker)}
-              className={`w-12 h-6 rounded-full transition-colors relative ${isJoker ? 'bg-blue-600' : 'bg-slate-200'}`}
-            >
-              <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isJoker ? 'left-7' : 'left-1'}`} />
-            </button>
           </div>
 
           <div className="flex gap-3">
