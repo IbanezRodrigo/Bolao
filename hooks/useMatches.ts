@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Match, Team } from '../types';
+import { Match, Team, MatchPhase, MatchStatus } from '../types';
 import { TEAMS, getTeamFlag } from '../constants';
 import { supabase } from '../supabase';
 
@@ -11,29 +11,40 @@ interface UseMatchesReturn {
 
 interface DBMatch {
   id: string;
-  home_team: string;
-  away_team: string;
-  home_score: number | null;
-  away_score: number | null;
+  home_team_id: string;
+  away_team_id: string;
   actual_home_score: number | null;
   actual_away_score: number | null;
   start_time: string;
   venue: string | null;
-  group: string | null;
-  status: string | null;
+  match_group: string | null;
+  phase: MatchPhase | null;
+  status: MatchStatus | null;
+  external_id: string | null;
 }
 
-/**
- * Custom hook to fetch matches from Supabase and transform to frontend Match interface
- * 
- * Transforms:
- * - home_team (DB) -> homeTeam (Frontend Team object)
- * - away_team (DB) -> awayTeam (Frontend Team object)
- * - actual_home_score (DB) -> actualHomeScore (Frontend) [fallback: home_score]
- * - actual_away_score (DB) -> actualAwayScore (Frontend) [fallback: away_score]
- * - start_time (DB) -> startTime (Frontend)
- * - status (DB) -> status (Frontend)
- */
+const getTeamObject = (teamId: string): Team => {
+  // Tenta achar pelo ID direto (ex: 'BRA', 'USA')
+  if (TEAMS[teamId]) return TEAMS[teamId];
+
+  // Tenta achar por nome em qualquer idioma
+  const found = Object.values(TEAMS).find(
+    t =>
+      t.name.pt.toLowerCase() === teamId.toLowerCase() ||
+      t.name.en.toLowerCase() === teamId.toLowerCase() ||
+      t.name.es.toLowerCase() === teamId.toLowerCase()
+  );
+  if (found) return found;
+
+  // Fallback
+  return {
+    id: teamId,
+    name: { pt: teamId, en: teamId, es: teamId },
+    flag: getTeamFlag(teamId),
+    color: '#CCCCCC',
+  };
+};
+
 export const useMatches = (): UseMatchesReturn => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -56,53 +67,27 @@ export const useMatches = (): UseMatchesReturn => {
           return;
         }
 
-        if (!data) {
-          setMatches([]);
-          return;
-        }
+        if (!data) { setMatches([]); return; }
 
-        // Transform DB data (snake_case) to Frontend interface (camelCase)
-        const transformedMatches: Match[] = data.map((dbMatch: DBMatch) => {
-          // Helper to find Team object by name or create fallback
-          const getTeamObject = (teamName: string): Team => {
-            // Try to find team by name in any language
-            const foundTeam = Object.values(TEAMS).find(
-              team => 
-                team.name.pt.toLowerCase() === teamName.toLowerCase() ||
-                team.name.en.toLowerCase() === teamName.toLowerCase() ||
-                team.name.es.toLowerCase() === teamName.toLowerCase() ||
-                team.id.toLowerCase() === teamName.toLowerCase()
-            );
+        const transformed: Match[] = data.map((m: DBMatch) => ({
+          id:               m.id,
+          homeTeam:         getTeamObject(m.home_team_id),
+          awayTeam:         getTeamObject(m.away_team_id),
+          startTime:        m.start_time,
+          venue:            m.venue || '',
+          group:            m.match_group || '',
+          phase:            m.phase || 'GROUP',
+          actualHomeScore:  m.actual_home_score ?? undefined,
+          actualAwayScore:  m.actual_away_score ?? undefined,
+          status:           m.status || 'SCHEDULED',
+          externalId:       m.external_id || undefined,
+        }));
 
-            if (foundTeam) return foundTeam;
-
-            // Fallback: Create a Team object with getTeamFlag lookup
-            return {
-              id: teamName,
-              name: { pt: teamName, en: teamName, es: teamName },
-              flag: getTeamFlag(teamName),
-              color: '#CCCCCC'
-            };
-          };
-
-          return {
-            id: dbMatch.id,
-            homeTeam: getTeamObject(dbMatch.home_team),
-            awayTeam: getTeamObject(dbMatch.away_team),
-            startTime: dbMatch.start_time,
-            venue: dbMatch.venue || '',
-            group: dbMatch.group || '',
-            actualHomeScore: dbMatch.actual_home_score ?? dbMatch.home_score ?? undefined,
-            actualAwayScore: dbMatch.actual_away_score ?? dbMatch.away_score ?? undefined,
-            status: dbMatch.status || 'SCHEDULED'
-          };
-        });
-
-        console.log(`✅ Fetched ${transformedMatches.length} matches from Supabase`);
-        setMatches(transformedMatches);
+        console.log(`✅ Fetched ${transformed.length} matches`);
+        setMatches(transformed);
       } catch (err: any) {
         console.error('❌ Unexpected error fetching matches:', err);
-        setError(err.message || 'Unknown error occurred');
+        setError(err.message || 'Unknown error');
       } finally {
         setLoading(false);
       }
