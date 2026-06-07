@@ -33,13 +33,6 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig }) => {
       example: lang === 'pt' ? 'Ex: Palpite 1×1 → Resultado 0×0' : lang === 'es' ? 'Ej: Pronóstico 1×1 → Resultado 0×0' : 'e.g. Guess 1×1 → Result 0×0',
     },
     {
-      label:   lang === 'pt' ? 'Saldo de Gols' : lang === 'es' ? 'Diferencia de Goles' : 'Goal Difference',
-      pts:     scoringConfig.goalDiff,
-      icon:    '⚖️',
-      desc:    lang === 'pt' ? 'Acerta a diferença de gols, mas não o placar.' : lang === 'es' ? 'Acierta la diferencia de goles, pero no el marcador.' : 'Correct goal difference, wrong score.',
-      example: lang === 'pt' ? 'Ex: Palpite 3×1 (dif.2) → Resultado 2×0 (dif.2)' : lang === 'es' ? 'Ej: 3×1 (dif.2) → 2×0 (dif.2)' : 'e.g. 3×1 (diff 2) → 2×0 (diff 2)',
-    },
-    {
       label:   lang === 'pt' ? 'Gols de Um Time' : lang === 'es' ? 'Goles de Un Equipo' : 'One Team Score',
       pts:     scoringConfig.oneTeamScore,
       icon:    '⚽',
@@ -49,30 +42,21 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig }) => {
   ];
 
   const multipliers = [
-    { phase: lang === 'pt' ? 'Fase de Grupos' : lang === 'es' ? 'Fase de Grupos' : 'Group Stage',      mult: scoringConfig.multGroup },
-    { phase: 'Round of 32',                                                                              mult: scoringConfig.multR32 ?? 1.2 },
-    { phase: lang === 'pt' ? 'Oitavas de Final' : lang === 'es' ? 'Octavos de Final' : 'Round of 16',  mult: scoringConfig.multR16 },
-    { phase: lang === 'pt' ? 'Quartas de Final' : lang === 'es' ? 'Cuartos de Final' : 'Quarter-Finals', mult: scoringConfig.multQF },
-    { phase: lang === 'pt' ? 'Semifinal' : lang === 'es' ? 'Semifinal' : 'Semi-Final',                  mult: scoringConfig.multSF },
-    { phase: lang === 'pt' ? 'Final' : 'Final',                                                          mult: scoringConfig.multFinal },
+    { phase: lang === 'pt' ? 'Fase de Grupos' : lang === 'es' ? 'Fase de Grupos' : 'Group Stage',        mult: scoringConfig.multGroup },
+    { phase: 'Round of 32',                                                                                mult: scoringConfig.multR32 ?? 1.2 },
+    { phase: lang === 'pt' ? 'Oitavas de Final' : lang === 'es' ? 'Octavos de Final' : 'Round of 16',    mult: scoringConfig.multR16 },
+    { phase: lang === 'pt' ? 'Quartas de Final' : lang === 'es' ? 'Cuartos de Final' : 'Quarter-Finals',  mult: scoringConfig.multQF },
+    { phase: lang === 'pt' ? 'Semifinal' : lang === 'es' ? 'Semifinal' : 'Semi-Final',                    mult: scoringConfig.multSF },
+    { phase: lang === 'pt' ? 'Final' : 'Final',                                                            mult: scoringConfig.multFinal },
   ];
 
-  // Apenas 2 critérios de desempate activos
   const tiebreakers = [
-    {
-      label: lang === 'pt' ? 'Maior número de placares exatos' : lang === 'es' ? 'Mayor número de marcadores exactos' : 'Most exact scores',
-      icon: '🎯',
-    },
-    {
-      label: lang === 'pt' ? 'Maior número de acertos de vencedor' : lang === 'es' ? 'Mayor número de ganadores correctos' : 'Most correct winners',
-      icon: '🏆',
-    },
+    { label: lang === 'pt' ? 'Maior número de placares exatos' : lang === 'es' ? 'Mayor número de marcadores exactos' : 'Most exact scores', icon: '🎯' },
+    { label: lang === 'pt' ? 'Maior número de acertos de vencedor' : lang === 'es' ? 'Mayor número de ganadores correctos' : 'Most correct winners', icon: '🏆' },
   ];
 
   return (
     <div className="space-y-6 pb-24">
-
-      {/* Pontuação */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-blue-600"></span>
@@ -99,15 +83,14 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig }) => {
         <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-100">
           <p className="text-[10px] text-blue-700 font-bold">
             {lang === 'pt'
-              ? '⚡ Pontuação acumulativa — critérios independentes somam-se entre si.'
+              ? '⚡ Critérios independentes — vencedor/empate e gols de um time acumulam-se.'
               : lang === 'es'
-              ? '⚡ Puntuación acumulativa — los criterios se suman.'
-              : '⚡ Cumulative scoring — criteria are independent and add up.'}
+              ? '⚡ Criterios independientes — ganador/empate y goles de un equipo se acumulan.'
+              : '⚡ Independent criteria — winner/draw and one team score are cumulative.'}
           </p>
         </div>
       </div>
 
-      {/* Multiplicadores */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-75">
         <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
@@ -115,29 +98,17 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig }) => {
         </h3>
         <div className="grid grid-cols-2 gap-2">
           {multipliers.map((m, idx) => (
-            <div
-              key={idx}
-              className={`p-3 rounded-xl flex justify-between items-center border ${
-                m.mult >= 2 ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-slate-100'
-              }`}
-            >
+            <div key={idx} className={`p-3 rounded-xl flex justify-between items-center border ${m.mult >= 2 ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-slate-100'}`}>
               <span className="text-xs font-bold text-slate-700">{m.phase}</span>
-              <span className={`text-sm font-black ${m.mult >= 2 ? 'text-yellow-600' : 'text-slate-500'}`}>
-                {m.mult}×
-              </span>
+              <span className={`text-sm font-black ${m.mult >= 2 ? 'text-yellow-600' : 'text-slate-500'}`}>{m.mult}×</span>
             </div>
           ))}
         </div>
         <p className="text-[10px] text-slate-400 font-medium mt-3">
-          {lang === 'pt'
-            ? 'Ex: Placar exato na Final → 10 × 2.0 = 20 pts'
-            : lang === 'es'
-            ? 'Ej: Marcador exacto en Final → 10 × 2.0 = 20 pts'
-            : 'e.g. Exact score in Final → 10 × 2.0 = 20 pts'}
+          {lang === 'pt' ? 'Ex: Placar exato na Final → 10 × 2.0 = 20 pts' : lang === 'es' ? 'Ej: Marcador exacto en Final → 10 × 2.0 = 20 pts' : 'e.g. Exact score in Final → 10 × 2.0 = 20 pts'}
         </p>
       </div>
 
-      {/* Prazo */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100">
         <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-red-600"></span>
@@ -145,37 +116,20 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig }) => {
         </h3>
         <div className="bg-red-50 p-4 rounded-2xl border border-red-100 space-y-2">
           <p className="text-xs text-red-800 font-bold">
-            {lang === 'pt'
-              ? '🔒 Palpites fecham 10 minutos antes do início da partida.'
-              : lang === 'es'
-              ? '🔒 Los pronósticos cierran 10 minutos antes del partido.'
-              : '🔒 Predictions close 10 minutes before kick-off.'}
+            {lang === 'pt' ? '🔒 Palpites fecham 10 minutos antes do início da partida.' : lang === 'es' ? '🔒 Los pronósticos cierran 10 minutos antes del partido.' : '🔒 Predictions close 10 minutes before kick-off.'}
           </p>
           <p className="text-xs text-red-700 font-medium">
-            {lang === 'pt'
-              ? '✏️ Pode editar o palpite até o fechamento.'
-              : lang === 'es'
-              ? '✏️ Puede editar hasta el cierre.'
-              : '✏️ You can edit until closing time.'}
+            {lang === 'pt' ? '✏️ Pode editar o palpite até o fechamento.' : lang === 'es' ? '✏️ Puede editar hasta el cierre.' : '✏️ You can edit until closing time.'}
           </p>
           <p className="text-xs text-red-700 font-medium">
-            {lang === 'pt'
-              ? '📊 Considera tempo regulamentar + prorrogação. Pênaltis NÃO contam.'
-              : lang === 'es'
-              ? '📊 Tiempo regular + prórroga. Penales NO cuentan.'
-              : '📊 Regular time + extra time. Penalties do NOT count.'}
+            {lang === 'pt' ? '📊 Considera tempo regulamentar + prorrogação. Pênaltis NÃO contam.' : lang === 'es' ? '📊 Tiempo regular + prórroga. Penales NO cuentan.' : '📊 Regular time + extra time. Penalties do NOT count.'}
           </p>
           <p className="text-xs text-red-700 font-medium">
-            {lang === 'pt'
-              ? '👁️ Palpites ficam ocultos para os outros participantes até o jogo começar.'
-              : lang === 'es'
-              ? '👁️ Pronósticos ocultos hasta el inicio.'
-              : '👁️ Predictions hidden until match starts.'}
+            {lang === 'pt' ? '👁️ Palpites ficam ocultos para os outros participantes até o jogo começar.' : lang === 'es' ? '👁️ Pronósticos ocultos hasta el inicio.' : '👁️ Predictions hidden until match starts.'}
           </p>
         </div>
       </div>
 
-      {/* Desempate — apenas 2 critérios */}
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
         <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-green-600"></span>
@@ -183,24 +137,15 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig }) => {
         </h3>
         <div className="space-y-2">
           {tiebreakers.map((tb, idx) => (
-            <div
-              key={idx}
-              className="text-xs text-slate-600 font-bold bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3"
-            >
-              <span className="w-5 h-5 bg-white rounded-md flex items-center justify-center text-[10px] shadow-sm text-slate-400 border border-slate-100 flex-shrink-0">
-                {idx + 1}
-              </span>
+            <div key={idx} className="text-xs text-slate-600 font-bold bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center gap-3">
+              <span className="w-5 h-5 bg-white rounded-md flex items-center justify-center text-[10px] shadow-sm text-slate-400 border border-slate-100 flex-shrink-0">{idx + 1}</span>
               <span className="mr-1">{tb.icon}</span>
               {tb.label}
             </div>
           ))}
         </div>
         <p className="text-[10px] text-slate-400 font-medium mt-3">
-          {lang === 'pt'
-            ? 'Em caso de empate em todos os critérios, a posição é decidida por sorteio.'
-            : lang === 'es'
-            ? 'En caso de empate en todos los criterios, la posición se decide por sorteo.'
-            : 'If all criteria are tied, position is decided by draw.'}
+          {lang === 'pt' ? 'Em caso de empate em todos os critérios, a posição é decidida por sorteio.' : lang === 'es' ? 'En caso de empate en todos los criterios, la posición se decide por sorteo.' : 'If all criteria are tied, position is decided by draw.'}
         </p>
       </div>
 
