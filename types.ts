@@ -1,10 +1,10 @@
 // ============================================================================
-// BOLÃO FIFA 2026 — TYPES v2.0
+// BOLÃO FIFA 2026 — TYPES v2.1
 // ============================================================================
 
 export type Language   = 'pt' | 'en' | 'es';
 export type GroupRole  = 'OWNER' | 'ADMIN' | 'MEMBER';
-export type MatchPhase = 'GROUP' | 'R16' | 'QF' | 'SF' | 'FINAL';
+export type MatchPhase = 'GROUP' | 'R32' | 'R16' | 'QF' | 'SF' | 'FINAL'; // R32 adicionado
 export type MatchStatus = 'SCHEDULED' | 'LIVE' | 'FINISHED' | 'CANCELLED';
 
 // ----------------------------------------------------------------------------
@@ -65,14 +65,14 @@ export interface Match {
   id: string;
   homeTeam: Team;
   awayTeam: Team;
-  startTime: string;       // ISO format
+  startTime: string;
   venue: string;
-  group: string;           // 'A', 'B', ... ou 'R16', 'QF', etc.
-  phase: MatchPhase;       // NOVO: para multiplicador de pontos
+  group: string;
+  phase: MatchPhase;
   actualHomeScore?: number;
   actualAwayScore?: number;
   status: MatchStatus;
-  externalId?: string;     // ID da API externa
+  externalId?: string;
 }
 
 // ----------------------------------------------------------------------------
@@ -81,17 +81,16 @@ export interface Match {
 export interface Prediction {
   homeScore: number;
   awayScore: number;
-  timestamp: number;       // submitted_at para desempate
+  timestamp: number;
   isJoker?: boolean;
 
-  // Pontuação calculada (preenchida após jogo terminar)
-  ptsExactScore?: number;  // 10 pts
-  ptsWinner?: number;      // 5 pts
-  ptsGoalDiff?: number;    // 3 pts
-  ptsOneTeam?: number;     // 1 pt
-  ptsTotalBase?: number;   // soma base
-  ptsMultiplier?: number;  // fator da fase
-  ptsFinal?: number;       // total final
+  ptsExactScore?: number;
+  ptsWinner?: number;
+  ptsGoalDiff?: number;
+  ptsOneTeam?: number;
+  ptsTotalBase?: number;
+  ptsMultiplier?: number;
+  ptsFinal?: number;
 }
 
 // ----------------------------------------------------------------------------
@@ -101,9 +100,10 @@ export interface ScoringConfig {
   exactScore:   number;   // 10
   winner:       number;   // 5
   correctDraw:  number;   // 5
-  goalDiff:     number;   // 3
+  goalDiff:     number;   // 0 (removido)
   oneTeamScore: number;   // 1
   multGroup:    number;   // 1.0
+  multR32:      number;   // 1.2 — adicionado
   multR16:      number;   // 1.2
   multQF:       number;   // 1.4
   multSF:       number;   // 1.6
