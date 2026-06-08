@@ -2,10 +2,17 @@
 import { Team, Match, Language, Translations, Group, ScoringConfig } from './types';
 
 export const SCORING_RULES: ScoringConfig = {
-  exact: 25,
-  diff: 18,
-  outcome: 10,
-  oneScore: 4
+  exactScore:   10,
+  winner:       5,
+  correctDraw:  5,
+  goalDiff:     0,
+  oneTeamScore: 1,
+  multGroup:    1.0,
+  multR32:      1.2,
+  multR16:      1.2,
+  multQF:       1.4,
+  multSF:       1.6,
+  multFinal:    2.0,
 };
 
 export const TEAMS: Record<string, Team> = {
