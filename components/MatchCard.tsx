@@ -43,7 +43,6 @@ const MatchCard: React.FC<MatchCardProps> = ({
       const s = match.status.toUpperCase();
       if (s === 'FINISHED') return 'FINISHED';
       if (s === 'LIVE' || s === 'IN_PLAY' || s === 'PAUSED') return 'LIVE';
-      if (s === 'SCHEDULED' || s === 'TIMED') return 'SCHEDULED';
       if (['POSTPONED', 'SUSPENDED', 'CANCELLED'].includes(s)) return 'FINISHED';
     }
     if (now >= startTime) return 'LIVE';
@@ -53,10 +52,13 @@ const MatchCard: React.FC<MatchCardProps> = ({
   const status = getMatchStatus();
 
   // ── Visibilidade dos palpites ─────────────────────────────────────────────
-  // Regra: palpites só ficam visíveis APÓS o jogo começar (LIVE ou FINISHED)
-  const predictionsVisible = status === 'LIVE' || status === 'FINISHED';
+  // Palpites visíveis quando: jogo LIVE, FINISHED, ou start_time já passou
+  const predictionsVisible = status === 'LIVE' || status === 'FINISHED' || now >= startTime;
 
-  // ── Buscar palpites dos outros (Supabase) ────────────────────────────────
+  // ── Deadline de palpites (10 min antes) ───────────────────────────────────
+  const deadlinePassed = now >= new Date(startTime.getTime() - 10 * 60 * 1000);
+
+  // ── Buscar palpites dos outros ────────────────────────────────────────────
   const fetchOtherPredictions = async () => {
     if (!groupId || !predictionsVisible) return;
     setLoadingOthers(true);
@@ -152,7 +154,6 @@ const MatchCard: React.FC<MatchCardProps> = ({
                   <span className="text-slate-200 font-bold text-2xl">-</span>
                   <span className="text-4xl font-black text-slate-900">{match.actualAwayScore ?? 0}</span>
                 </div>
-                {/* Meu palpite — só visível após início */}
                 {prediction && (
                   <div className="mt-2 flex items-center gap-1.5 bg-blue-50 px-2 py-0.5 rounded-lg">
                     <span className="text-[9px] font-bold text-blue-400 uppercase tracking-tighter">
@@ -161,7 +162,6 @@ const MatchCard: React.FC<MatchCardProps> = ({
                     <span className="text-[10px] font-black text-blue-600">{prediction.homeScore}-{prediction.awayScore}</span>
                   </div>
                 )}
-                {/* Pontuação */}
                 {status === 'FINISHED' && prediction?.ptsFinal !== undefined && (
                   <div className="mt-1">
                     <span className={`text-[10px] font-black px-3 py-1 rounded-full ${(prediction.ptsFinal ?? 0) > 0 ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
@@ -171,7 +171,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
                 )}
               </div>
             ) : (
-              <button onClick={onClick} className="group flex flex-col items-center gap-1">
+              <button onClick={onClick} disabled={deadlinePassed} className="group flex flex-col items-center gap-1">
                 {prediction ? (
                   <div className="flex flex-col items-center">
                     <div className="flex items-center gap-3">
@@ -179,13 +179,21 @@ const MatchCard: React.FC<MatchCardProps> = ({
                       <span className="text-slate-200 font-bold">-</span>
                       <span className="text-3xl font-black text-blue-600">{prediction.awayScore}</span>
                     </div>
-                    <span className="text-[9px] font-bold text-slate-300 uppercase mt-1 group-hover:text-blue-500 transition-colors">
-                      {lang === 'pt' ? 'EDITAR PLACAR' : lang === 'es' ? 'EDITAR' : 'EDIT'}
-                    </span>
+                    {!deadlinePassed && (
+                      <span className="text-[9px] font-bold text-slate-300 uppercase mt-1 group-hover:text-blue-500 transition-colors">
+                        {lang === 'pt' ? 'EDITAR PLACAR' : lang === 'es' ? 'EDITAR' : 'EDIT'}
+                      </span>
+                    )}
                   </div>
                 ) : (
-                  <div className="px-6 py-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl text-xs font-black text-slate-400 group-hover:border-blue-300 group-hover:text-blue-500 transition-all">
-                    {lang === 'pt' ? 'PALPITAR' : lang === 'es' ? 'APOSTAR' : 'PREDICT'}
+                  <div className={`px-6 py-3 bg-slate-50 border-2 border-dashed rounded-2xl text-xs font-black transition-all ${
+                    deadlinePassed
+                      ? 'border-slate-100 text-slate-300 cursor-not-allowed'
+                      : 'border-slate-200 text-slate-400 group-hover:border-blue-300 group-hover:text-blue-500'
+                  }`}>
+                    {deadlinePassed
+                      ? (lang === 'pt' ? 'FECHADO' : lang === 'es' ? 'CERRADO' : 'LOCKED')
+                      : (lang === 'pt' ? 'PALPITAR' : lang === 'es' ? 'APOSTAR' : 'PREDICT')}
                   </div>
                 )}
               </button>
@@ -201,9 +209,9 @@ const MatchCard: React.FC<MatchCardProps> = ({
 
         {/* Action Bar */}
         <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-          {status === 'SCHEDULED' ? (
+          {!predictionsVisible ? (
             <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">
-              {lang === 'pt' ? 'Palpites fecham no início do jogo' : lang === 'es' ? 'Pronósticos cierran al inicio' : 'Predictions close at kick-off'}
+              {lang === 'pt' ? 'Palpites fecham 10 min antes do jogo' : lang === 'es' ? 'Pronósticos cierran 10 min antes' : 'Predictions close 10 mins before kick-off'}
             </span>
           ) : (
             <div className="flex items-center justify-between w-full">
@@ -217,14 +225,17 @@ const MatchCard: React.FC<MatchCardProps> = ({
                 onClick={() => setShowOthers(!showOthers)}
                 className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform"
               >
-                <span>{showOthers ? (lang === 'pt' ? 'Ocultar' : 'Hide') : (lang === 'pt' ? 'Ver Palpites' : lang === 'es' ? 'Ver Apuestas' : 'See Predictions')}</span>
+                <span>{showOthers
+                  ? (lang === 'pt' ? 'Ocultar' : lang === 'es' ? 'Ocultar' : 'Hide')
+                  : (lang === 'pt' ? 'Ver Palpites' : lang === 'es' ? 'Ver Apuestas' : 'See Predictions')}
+                </span>
                 <span className="text-xs">👁️</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* Outros palpites — só visíveis após início do jogo */}
+        {/* Outros palpites */}
         {showOthers && predictionsVisible && (
           <div className="mt-4 pt-4 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">
