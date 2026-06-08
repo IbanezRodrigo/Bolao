@@ -149,6 +149,49 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig }) => {
         </p>
       </div>
 
+      {/* Premiação */}
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200">
+        <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+          {lang === 'pt' ? 'Premiação' : lang === 'es' ? 'Premios' : 'Prizes'}
+        </h3>
+        <div className="space-y-3">
+          {[
+            { place: 1, emoji: '🥇', pct: 60, color: 'bg-yellow-50 border-yellow-200', text: 'text-yellow-700', badge: 'bg-yellow-500' },
+            { place: 2, emoji: '🥈', pct: 25, color: 'bg-slate-50 border-slate-200',   text: 'text-slate-600',  badge: 'bg-slate-400' },
+            { place: 3, emoji: '🥉', pct: 15, color: 'bg-orange-50 border-orange-200', text: 'text-orange-700', badge: 'bg-orange-400' },
+          ].map(({ place, emoji, pct, color, text, badge }) => (
+            <div key={place} className={`flex items-center justify-between p-4 rounded-2xl border ${color}`}>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{emoji}</span>
+                <div>
+                  <p className={`text-xs font-black uppercase tracking-widest ${text}`}>
+                    {place === 1
+                      ? (lang === 'pt' ? '1º Colocado' : lang === 'es' ? '1.° Lugar' : '1st Place')
+                      : place === 2
+                      ? (lang === 'pt' ? '2º Colocado' : lang === 'es' ? '2.° Lugar' : '2nd Place')
+                      : (lang === 'pt' ? '3º Colocado' : lang === 'es' ? '3.° Lugar' : '3rd Place')}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                    {lang === 'pt' ? 'do pote total' : lang === 'es' ? 'del bote total' : 'of the total pot'}
+                  </p>
+                </div>
+              </div>
+              <div className={`${badge} text-white px-4 py-2 rounded-full`}>
+                <span className="text-lg font-black">{pct}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-slate-400 font-medium mt-4 text-center">
+          {lang === 'pt'
+            ? '💰 O pote é definido pelo organizador do grupo antes do início do torneio.'
+            : lang === 'es'
+            ? '💰 El bote lo define el organizador del grupo antes del inicio del torneo.'
+            : '💰 The pot is defined by the group organiser before the tournament starts.'}
+        </p>
+      </div>
+
       <div className="text-center px-6">
         <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">United 2026 • FIFA World Cup Predictor</p>
       </div>
