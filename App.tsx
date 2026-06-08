@@ -8,12 +8,14 @@ import Leaderboard from './components/Leaderboard';
 import GroupSelector from './components/GroupSelector';
 import GroupDashboard from './components/GroupDashboard';
 import Rules from './components/Rules';
+import ResetPassword from './components/ResetPassword'; // NEW
 import { supabase } from './supabase';
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('pt');
   const [user, setUser] = useState<User | null>(null);
   const [showProfileSetup, setShowProfileSetup] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false); // NEW
   const [activeTab, setActiveTab] = useState<'matches' | 'ranking' | 'groups' | 'rules'>('matches');
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [viewingGroupDashboard, setViewingGroupDashboard] = useState(false);
@@ -28,7 +30,7 @@ const App: React.FC = () => {
       try {
         const { data, error } = await supabase
           .from('scoring_rules')
-          .select('exact_score, winner, correct_draw, goal_diff, one_team_score, mult_group, mult_r16, mult_qf, mult_sf, mult_final')
+          .select('exact_score, winner, correct_draw, goal_diff, one_team_score, mult_group, mult_r16, mult_qf, mult_sf, mult_final, mult_r32')
           .eq('id', 'current')
           .single();
         if (error) throw error;
@@ -40,6 +42,7 @@ const App: React.FC = () => {
             goalDiff:     data.goal_diff,
             oneTeamScore: data.one_team_score,
             multGroup:    data.mult_group,
+            multR32:      data.mult_r32,
             multR16:      data.mult_r16,
             multQF:       data.mult_qf,
             multSF:       data.mult_sf,
@@ -84,8 +87,16 @@ const App: React.FC = () => {
       }
     };
     restoreSession();
+
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') { setUser(null); setActiveGroupId(null); }
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setActiveGroupId(null);
+      }
+      // NEW: detectar reset de password
+      if (event === 'PASSWORD_RECOVERY') {
+        setShowResetPassword(true);
+      }
     });
     return () => listener?.subscription?.unsubscribe();
   }, []);
@@ -240,16 +251,28 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className={`flex-1 ${!user && !showProfileSetup ? '' : 'max-w-xl mx-auto px-4 mt-6 w-full'}`}>
-        {!user && !showProfileSetup && (
+      <main className={`flex-1 ${!user && !showProfileSetup && !showResetPassword ? '' : 'max-w-xl mx-auto px-4 mt-6 w-full'}`}>
+
+        {/* NEW: ecrã de reset de password */}
+        {showResetPassword && (
+          <ResetPassword
+            lang={lang}
+            onComplete={() => {
+              setShowResetPassword(false);
+              supabase.auth.signOut();
+            }}
+          />
+        )}
+
+        {!showResetPassword && !user && !showProfileSetup && (
           <Login lang={lang} onLogin={handleLogin} onRegister={handleRegister} />
         )}
-        {showProfileSetup && (
+        {!showResetPassword && showProfileSetup && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <ProfileSetup lang={lang} onComplete={handleProfileComplete} />
           </div>
         )}
-        {user && !showProfileSetup && (
+        {!showResetPassword && user && !showProfileSetup && (
           <div className="space-y-6 animate-in fade-in duration-500">
             {activeTab === 'matches' && (
               <>
@@ -318,7 +341,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {user && !showProfileSetup && (
+      {user && !showProfileSetup && !showResetPassword && (
         <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-sm bg-white/90 backdrop-blur-xl border border-slate-200 rounded-3xl shadow-2xl p-1.5 flex gap-1 z-50">
           {(['matches', 'ranking', 'groups', 'rules'] as const).map(tab => {
             const icons: Record<string, string> = {
