@@ -10,8 +10,16 @@ const FOOTBALL_API_BASE = 'https://api.football-data.org/v4'
 const WC_2026_ID = 2000
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const auth = req.headers['authorization']
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Aceita tanto "Authorization: Bearer <secret>" quanto "x-cron-secret: <secret>"
+  const authHeader = req.headers['authorization']
+  const cronHeader = req.headers['x-cron-secret']
+  const secret = process.env.CRON_SECRET
+
+  const authorized =
+    authHeader === `Bearer ${secret}` ||
+    cronHeader === secret
+
+  if (!authorized) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
@@ -19,13 +27,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
 
     // Busca jogos pendentes de resultado (já passaram 2h do início)
-    const { data: pendingMatches, error } = await supabase
+    const { data: pendingMatches, error: pendingError } = await supabase
       .from('matches')
       .select('id, external_id, home_team_id, away_team_id, start_time, status')
       .neq('status', 'FINISHED')
       .lt('start_time', twoHoursAgo)
 
-    if (error) throw error
+    if (pendingError) throw pendingError
 
     // Busca jogos com equipas TBD que ainda não começaram
     const { data: tbdMatches, error: tbdError } = await supabase
@@ -36,12 +44,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (tbdError) throw tbdError
 
-    // Uma só chamada à API — busca TODOS os jogos da Copa (não só FINISHED)
+    // Se não há nada para sincronizar, retorna 200 sem chamar a API externa
+    const hasPending = (pendingMatches?.length ?? 0) > 0
+    const hasTbd = (tbdMatches?.length ?? 0) > 0
+
+    if (!hasPending && !hasTbd) {
+      return res.json({
+        synced: 0,
+        teams_updated: 0,
+        total_pending: 0,
+        total_tbd: 0,
+        message: 'Nothing to sync'
+      })
+    }
+
+    // Busca TODOS os jogos da Copa na API externa
     const apiRes = await fetch(
       `${FOOTBALL_API_BASE}/competitions/${WC_2026_ID}/matches`,
       { headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY! } }
     )
-    if (!apiRes.ok) throw new Error(`Football API error: ${apiRes.status}`)
+
+    if (!apiRes.ok) {
+      // API externa falhou — retorna 200 com aviso em vez de 500
+      console.error(`Football API error: ${apiRes.status}`)
+      return res.json({
+        synced: 0,
+        teams_updated: 0,
+        total_pending: pendingMatches?.length ?? 0,
+        total_tbd: tbdMatches?.length ?? 0,
+        warning: `Football API returned ${apiRes.status} — skipped`
+      })
+    }
 
     const apiData = await apiRes.json()
     const allApiMatches: any[] = apiData.matches || []
@@ -64,7 +97,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_at: new Date().toISOString()
       }
 
-      // Se as equipas ainda eram TBD, actualiza também
       if (pending.home_team_id === 'TBD' && apiMatch.homeTeam?.tla) {
         updatePayload.home_team_id = apiMatch.homeTeam.tla
       }
@@ -90,7 +122,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const homeTla = apiMatch.homeTeam?.tla
       const awayTla = apiMatch.awayTeam?.tla
 
-      // Só actualiza se a API já tem as equipas definidas (não TBD/null)
       const needsUpdate =
         (tbd.home_team_id === 'TBD' && homeTla && homeTla !== 'TBD') ||
         (tbd.away_team_id === 'TBD' && awayTla && awayTla !== 'TBD')
