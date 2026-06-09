@@ -21,6 +21,15 @@ interface OtherPrediction {
   ptsFinal: number | null;
 }
 
+// Formata horário no timezone local do browser do usuário
+const formatLocalTime = (date: Date): string => {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }).format(date);
+};
+
 const MatchCard: React.FC<MatchCardProps> = ({
   match,
   lang,
@@ -52,7 +61,6 @@ const MatchCard: React.FC<MatchCardProps> = ({
   const status = getMatchStatus();
 
   // ── Visibilidade dos palpites ─────────────────────────────────────────────
-  // Palpites visíveis quando: jogo LIVE, FINISHED, ou start_time já passou
   const predictionsVisible = status === 'LIVE' || status === 'FINISHED' || now >= startTime;
 
   // ── Deadline de palpites (10 min antes) ───────────────────────────────────
@@ -130,7 +138,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
             {status === 'SCHEDULED' && (
               <div className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full">
                 <span className="text-[10px] font-black uppercase tracking-widest">
-                  {new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }).format(startTime)}
+                  {formatLocalTime(startTime)}
                 </span>
               </div>
             )}
