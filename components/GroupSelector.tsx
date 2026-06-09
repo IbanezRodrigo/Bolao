@@ -243,67 +243,6 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
     );
   }
 
-  if (view === 'create') {
-    return (
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 animate-in slide-in-from-right-4 duration-500">
-        <div className="flex items-center justify-between mb-8">
-          <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{t.createGroup}</h3>
-        </div>
-        <form onSubmit={handleCreate} className="space-y-6">
-          <div className="flex flex-col items-center mb-4">
-            <div className="relative group cursor-pointer">
-              <div className="w-20 h-20 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 overflow-hidden relative shadow-inner">
-                {newPhoto ? (
-                  <img src={newPhoto} alt="Preview" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-[9px] font-bold text-center px-2 uppercase tracking-widest">Foto do Grupo</span>
-                )}
-                <input type="file" accept="image/*" onChange={handlePhotoUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-              </div>
-            </div>
-          </div>
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-2">Nome do Grupo*</label>
-            <input
-              required value={newName} onChange={e => setNewName(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold"
-              placeholder="Ex: Família & Futebol"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-2">Descrição (Opcional)</label>
-            <textarea
-              value={newDesc} onChange={e => setNewDesc(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium text-sm"
-              placeholder="Fale um pouco sobre o grupo..." rows={2}
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 mb-2">Idioma Padrão</label>
-            <select value={newLang} onChange={e => setNewLang(e.target.value as Language)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 outline-none font-bold">
-              <option value="pt">Português (PT)</option>
-              <option value="en">English (EN)</option>
-              <option value="es">Español (ES)</option>
-            </select>
-          </div>
-          {error && (
-            <div className="bg-red-50 text-red-600 text-xs font-bold p-3 rounded-xl border border-red-100 flex items-center gap-2">
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {error}
-            </div>
-          )}
-          <button type="submit" disabled={loading}
-            className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-500/20 transition transform active:scale-95 disabled:opacity-50">
-            {loading ? 'A criar...' : t.createGroup}
-          </button>
-        </form>
-      </div>
-    );
-  }
-
   if (view === 'join') {
     return (
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 animate-in slide-in-from-left-4 duration-500">
@@ -336,18 +275,12 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
         <div className="flex justify-between items-center mb-8">
           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{t.myGroups}</h3>
-          <div className="flex gap-2">
-            <button onClick={() => setView('join')} className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all" title={t.joinGroup}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
-            <button onClick={() => setView('create')} className="p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20 transition-all" title={t.createGroup}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
-          </div>
+          {/* Botão entrar no grupo — criar grupo desativado */}
+          <button onClick={() => setView('join')} className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition-all" title={t.joinGroup}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
         </div>
         <div className="grid gap-3">
           {myGroups.map(group => (
