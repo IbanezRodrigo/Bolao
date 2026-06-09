@@ -248,11 +248,6 @@ const GroupSelector: React.FC<GroupSelectorProps> = ({
       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 animate-in slide-in-from-right-4 duration-500">
         <div className="flex items-center justify-between mb-8">
           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{t.createGroup}</h3>
-          <button onClick={() => setView('list')} className="text-slate-400 hover:text-slate-600">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
         <form onSubmit={handleCreate} className="space-y-6">
           <div className="flex flex-col items-center mb-4">
