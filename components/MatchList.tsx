@@ -26,12 +26,21 @@ const PHASE_LABELS: Record<Phase, Record<string, string>> = {
   FINAL: { pt: 'Final',            en: 'Final',           es: 'Final'              },
 };
 
+// CORRIGIDO: usa horário local do browser (não UTC) para agrupar por data
+const getLocalDateKey = (startTime: string): string => {
+  const d = new Date(startTime);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const groupMatchesByPhaseAndDate = (matches: Match[]): Record<string, Record<string, Match[]>> => {
   const result: Record<string, Record<string, Match[]>> = {};
   matches.forEach(m => {
     const phase = (m.phase || 'GROUP') as Phase;
     if (!result[phase]) result[phase] = {};
-    const dateKey = new Date(m.startTime).toISOString().split('T')[0];
+    const dateKey = getLocalDateKey(m.startTime); // usa local, não UTC
     if (!result[phase][dateKey]) result[phase][dateKey] = [];
     result[phase][dateKey].push(m);
   });
@@ -58,11 +67,8 @@ const ChevronIcon = ({ open }: { open: boolean }) => (
 const MatchList: React.FC<MatchListProps> = ({ lang, groupId }) => {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
-  // Finished: collapsed by default at top
   const [showFinished, setShowFinished] = useState(false);
   const [openFinishedPhases, setOpenFinishedPhases] = useState<Record<string, boolean>>({});
-
-  // Upcoming: GROUP open by default, rest collapsed
   const [openUpcomingPhases, setOpenUpcomingPhases] = useState<Record<string, boolean>>({ GROUP: true });
 
   const [currentUserId, setCurrentUserId] = useState<string>('');
@@ -149,7 +155,6 @@ const MatchList: React.FC<MatchListProps> = ({ lang, groupId }) => {
 
           {showFinished && (
             <div className="space-y-3">
-              {/* Fases de trás para frente (mais recente primeiro) */}
               {[...PHASE_ORDER].reverse().filter(phase => finishedByPhase[phase]).map(phase => (
                 <div key={phase} className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm">
                   <button
