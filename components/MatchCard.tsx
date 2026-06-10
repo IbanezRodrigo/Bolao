@@ -21,6 +21,149 @@ interface OtherPrediction {
   ptsFinal: number | null;
 }
 
+// ── Mapeamento external_id (football-data.org) → FIFA Match ID ───────────────
+// Fonte: https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures
+// URL padrão: https://www.fifa.com/en/match-centre/match/17/285023/289273/{FIFA_ID}
+const FIFA_ID_MAP: Record<string, string> = {
+  // GROUP A
+  '537327': '400021443', // MEX x RSA
+  '537328': '400021441', // KOR x CZE
+  '537329': '400021440', // CZE x RSA
+  '537330': '400021442', // MEX x KOR
+  '537331': '400021445', // RSA x KOR
+  '537332': '400021444', // CZE x MEX
+  // GROUP B
+  '537333': '400021449', // CAN x BIH
+  '537334': '400021447', // QAT x SUI
+  '537335': '400021446', // SUI x BIH
+  '537336': '400021450', // CAN x QAT
+  '537337': '400021451', // SUI x CAN
+  '537338': '400021448', // BIH x QAT
+  // GROUP C
+  '537339': '400021456', // BRA x MAR
+  '537340': '400021453', // HAI x SCO
+  '537341': '400021457', // BRA x HAI
+  '537342': '400021454', // SCO x MAR
+  '537343': '400021455', // SCO x BRA
+  '537344': '400021452', // MAR x HAI
+  // GROUP D
+  '537345': '400021458', // USA x PAR
+  '537346': '400021463', // AUS x TUR
+  '537347': '400021460', // TUR x PAR
+  '537348': '400021462', // USA x AUS
+  '537349': '400021459', // TUR x USA
+  '537350': '400021461', // PAR x AUS
+  // GROUP E
+  '537351': '400021464', // GER x CUW
+  '537352': '400021467', // CIV x ECU
+  '537353': '400021469', // GER x CIV
+  '537354': '400021465', // ECU x CUW
+  '537355': '400021466', // ECU x GER
+  '537356': '400021468', // CUW x CIV
+  // GROUP F
+  '537357': '400021470', // NED x JPN
+  '537358': '400021474', // SWE x TUN
+  '537359': '400021472', // NED x SWE
+  '537360': '400021475', // TUN x JPN
+  '537361': '400021473', // TUN x NED
+  '537362': '400021471', // JPN x SWE
+  // GROUP G
+  '537363': '400021478', // BEL x EGY
+  '537364': '400021476', // IRN x NZL
+  '537365': '400021477', // BEL x IRN
+  '537366': '400021480', // NZL x EGY
+  '537367': '400021481', // NZL x BEL
+  '537368': '400021479', // EGY x IRN
+  // GROUP H
+  '537369': '400021482', // ESP x CPV
+  '537370': '400021486', // KSA x URY
+  '537371': '400021483', // ESP x KSA
+  '537372': '400021487', // URY x CPV
+  '537373': '400021484', // URY x ESP
+  '537374': '400021485', // CPV x KSA
+  // GROUP I
+  '537391': '400021490', // FRA x SEN
+  '537392': '400021488', // IRQ x NOR
+  '537393': '400021491', // NOR x SEN
+  '537394': '400021492', // FRA x IRQ
+  '537395': '400021489', // NOR x FRA
+  '537396': '400021493', // SEN x IRQ
+  // GROUP J
+  '537397': '400021496', // ARG x ALG
+  '537398': '400021498', // AUT x JOR
+  '537399': '400021494', // ARG x AUT
+  '537400': '400021499', // JOR x ALG
+  '537401': '400021495', // JOR x ARG
+  '537402': '400021497', // ALG x AUT
+  // GROUP K
+  '537403': '400021502', // POR x COD
+  '537404': '400021504', // UZB x COL
+  '537405': '400021503', // POR x UZB
+  '537406': '400021501', // COL x COD
+  '537407': '400021505', // COL x POR
+  '537408': '400021500', // COD x UZB
+  // GROUP L
+  '537409': '400021507', // ENG x CRO
+  '537410': '400021510', // GHA x PAN
+  '537411': '400021506', // ENG x GHA
+  '537412': '400021511', // PAN x CRO
+  '537413': '400021508', // PAN x ENG
+  '537414': '400021509', // CRO x GHA
+  // ROUND OF 32
+  '537415': '400021522', // R32 Jun 29
+  '537416': '400021523', // R32 Jun 30
+  '537417': '400021513', // R32 Jun 29
+  '537418': '400021514', // R32 Jun 30
+  '537419': '400021526', // R32 Jul 2
+  '537420': '400021527', // R32 Jul 3
+  '537421': '400021519', // R32 Jul 2
+  '537422': '400021520', // R32 Jul 1
+  '537423': '400021516', // R32 Jun 29
+  '537424': '400021524', // R32 Jul 2
+  '537425': '400021525', // R32 Jul 1
+  '537426': '400021512', // R32 Jul 1
+  '537427': '400021521', // R32 Jul 3
+  '537428': '400021515', // R32 Jul 3
+  '537429': '400021517', // R32 Jul 4
+  '537430': '400021518', // R32 Jun 28
+  // ROUND OF 16
+  '537375': '400021533', // R16 Jul 4
+  '537376': '400021530', // R16 Jul 4
+  '537377': '400021532', // R16 Jul 5
+  '537378': '400021531', // R16 Jul 6
+  '537379': '400021529', // R16 Jul 6
+  '537380': '400021534', // R16 Jul 7
+  '537381': '400021528', // R16 Jul 7
+  '537382': '400021535', // R16 Jul 7
+  // QUARTER FINALS
+  '537383': '400021536', // QF Jul 9
+  '537384': '400021538', // QF Jul 10
+  '537385': '400021539', // QF Jul 11
+  '537386': '400021537', // QF Jul 12
+  // SEMI FINALS
+  '537387': '400021541', // SF Jul 14
+  '537388': '400021540', // SF Jul 15
+  '537389': '400021542', // 3rd place Jul 18
+  // FINAL
+  '537390': '400021543', // Final Jul 19
+};
+
+const getFifaUrl = (externalId: string | undefined): string | null => {
+  if (!externalId) return null;
+  const fifaId = FIFA_ID_MAP[externalId];
+  if (!fifaId) return null;
+  return `https://www.fifa.com/en/match-centre/match/17/285023/289273/${fifaId}`;
+};
+
+// Formata horário no timezone local do browser do usuário
+const formatLocalTime = (date: Date): string => {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }).format(date);
+};
+
 const MatchCard: React.FC<MatchCardProps> = ({
   match,
   lang,
@@ -56,6 +199,9 @@ const MatchCard: React.FC<MatchCardProps> = ({
 
   // ── Deadline de palpites (10 min antes) ───────────────────────────────────
   const deadlinePassed = now >= new Date(startTime.getTime() - 10 * 60 * 1000);
+
+  // ── Link FIFA ─────────────────────────────────────────────────────────────
+  const fifaUrl = getFifaUrl(match.externalId);
 
   // ── Buscar palpites dos outros ────────────────────────────────────────────
   const fetchOtherPredictions = async () => {
@@ -106,13 +252,43 @@ const MatchCard: React.FC<MatchCardProps> = ({
       />
 
       <div className="p-6">
-        {/* Header */}
+        {/* ── Header: [grupo/estádio] [DETALHES DO JOGO] [status/hora] ── */}
         <div className="flex justify-between items-center mb-6">
-          <div className="flex flex-col">
+
+          {/* Esquerda: grupo + estádio */}
+          <div className="flex flex-col min-w-0 flex-shrink-0">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{match.group}</span>
-            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter">{match.venue}</span>
+            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate max-w-[100px]">{match.venue}</span>
           </div>
-          <div className="flex gap-2 items-center">
+
+          {/* Centro: botão DETALHES DO JOGO */}
+          {fifaUrl && (
+            <a
+              href={fifaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-[#326295] hover:bg-[#326295] group transition-all duration-200 mx-2 flex-shrink-0"
+              title="Ver detalhes no site oficial da FIFA"
+            >
+              <span
+                className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-400 group-hover:text-white transition-colors whitespace-nowrap"
+                style={{ fontFamily: "'Anton', 'Impact', 'Arial Black', sans-serif" }}
+              >
+                {lang === 'pt' ? 'DETALHES DO JOGO' : lang === 'es' ? 'DETALLES' : 'MATCH DETAILS'}
+              </span>
+              <svg
+                width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                className="text-slate-300 group-hover:text-white transition-colors flex-shrink-0"
+              >
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+          )}
+
+          {/* Direita: status (hora / AO VIVO / ENCERRADO) */}
+          <div className="flex gap-2 items-center flex-shrink-0">
             {status === 'LIVE' && (
               <div className="flex items-center gap-1.5 bg-red-500 text-white px-3 py-1 rounded-full animate-pulse">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
@@ -136,16 +312,16 @@ const MatchCard: React.FC<MatchCardProps> = ({
           </div>
         </div>
 
-        {/* Score Area — gap e tamanho reduzidos para caber em telas ~360px */}
-        <div className="flex items-center justify-between gap-2 mb-6">
+        {/* Score Area */}
+        <div className="flex items-center justify-between gap-4 mb-6">
           {/* Home */}
           <div className="flex flex-col items-center flex-1">
-            <div className="text-4xl mb-2 drop-shadow-md">{match.homeTeam.flag}</div>
+            <div className="text-5xl mb-3 drop-shadow-md">{match.homeTeam.flag}</div>
             <span className="font-black text-[11px] text-center text-slate-800 uppercase tracking-tight">{match.homeTeam.name[lang]}</span>
           </div>
 
           {/* Center */}
-          <div className="flex flex-col items-center min-w-[90px] max-w-[110px]">
+          <div className="flex flex-col items-center min-w-[120px]">
             {status !== 'SCHEDULED' ? (
               <div className="flex flex-col items-center">
                 <div className="flex items-center gap-4">
@@ -201,7 +377,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
 
           {/* Away */}
           <div className="flex flex-col items-center flex-1">
-            <div className="text-4xl mb-2 drop-shadow-md">{match.awayTeam.flag}</div>
+            <div className="text-5xl mb-3 drop-shadow-md">{match.awayTeam.flag}</div>
             <span className="font-black text-[11px] text-center text-slate-800 uppercase tracking-tight">{match.awayTeam.name[lang]}</span>
           </div>
         </div>
