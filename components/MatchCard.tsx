@@ -258,7 +258,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
           {/* Esquerda: grupo + estádio */}
           <div className="flex flex-col min-w-0 flex-shrink-0">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{match.group}</span>
-            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate max-w-[100px]">{match.venue}</span>
+            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter max-w-[120px] leading-tight line-clamp-2">{match.venue}</span>
           </div>
 
           {/* Centro: botão DETALHES DO JOGO */}
