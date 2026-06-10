@@ -252,43 +252,16 @@ const MatchCard: React.FC<MatchCardProps> = ({
       />
 
       <div className="p-6">
-        {/* ── Header: [grupo/estádio] [DETALHES DO JOGO] [status/hora] ── */}
-        <div className="flex justify-between items-center mb-6">
+        {/* ── Header: [grupo/estádio] [status/hora] ── */}
+        <div className="flex justify-between items-start mb-3">
 
-          {/* Esquerda: grupo + estádio */}
-          <div className="flex flex-col min-w-0 flex-shrink-0">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{match.group}</span>
-            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter max-w-[120px] leading-tight line-clamp-2">{match.venue}</span>
+          {/* Esquerda: grupo */}
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">{match.group}</span>
           </div>
 
-          {/* Centro: botão DETALHES DO JOGO */}
-          {fifaUrl && (
-            <a
-              href={fifaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-[#326295] hover:bg-[#326295] group transition-all duration-200 mx-2 flex-shrink-0"
-              title="Ver detalhes no site oficial da FIFA"
-            >
-              <span
-                className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-400 group-hover:text-white transition-colors whitespace-nowrap"
-                style={{ fontFamily: "'Anton', 'Impact', 'Arial Black', sans-serif" }}
-              >
-                {lang === 'pt' ? 'DETALHES DO JOGO' : lang === 'es' ? 'DETALLES' : 'MATCH DETAILS'}
-              </span>
-              <svg
-                width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                className="text-slate-300 group-hover:text-white transition-colors flex-shrink-0"
-              >
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                <polyline points="15 3 21 3 21 9"/>
-                <line x1="10" y1="14" x2="21" y2="3"/>
-              </svg>
-            </a>
-          )}
-
           {/* Direita: status (hora / AO VIVO / ENCERRADO) */}
-          <div className="flex gap-2 items-center flex-shrink-0">
+          <div className="flex gap-2 items-center flex-shrink-0 ml-2">
             {status === 'LIVE' && (
               <div className="flex items-center gap-1.5 bg-red-500 text-white px-3 py-1 rounded-full animate-pulse">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
@@ -312,8 +285,33 @@ const MatchCard: React.FC<MatchCardProps> = ({
           </div>
         </div>
 
+        {/* ── Botão DETALHES DO JOGO — linha própria, full width ── */}
+        {fifaUrl && (
+          <a
+            href={fifaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-2 mb-4 rounded-xl border border-slate-200 hover:border-[#326295] hover:bg-[#326295] group transition-all duration-200"
+          >
+            <span
+              className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-400 group-hover:text-white transition-colors"
+              style={{ fontFamily: "'Anton', 'Impact', 'Arial Black', sans-serif" }}
+            >
+              {lang === 'pt' ? 'DETALHES DO JOGO' : lang === 'es' ? 'DETALLES DEL PARTIDO' : 'MATCH DETAILS'}
+            </span>
+            <svg
+              width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+              className="text-slate-300 group-hover:text-white transition-colors flex-shrink-0"
+            >
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </a>
+        )}
+
         {/* Score Area */}
-        <div className="flex items-center justify-between gap-4 mb-6">
+        <div className="flex items-center justify-between gap-4 mb-2">
           {/* Home */}
           <div className="flex flex-col items-center flex-1">
             <div className="text-5xl mb-3 drop-shadow-md">{match.homeTeam.flag}</div>
@@ -381,6 +379,13 @@ const MatchCard: React.FC<MatchCardProps> = ({
             <span className="font-black text-[11px] text-center text-slate-800 uppercase tracking-tight">{match.awayTeam.name[lang]}</span>
           </div>
         </div>
+
+        {/* Estádio centralizado */}
+        {match.venue && (
+          <div className="text-center mb-4">
+            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter">{match.venue}</span>
+          </div>
+        )}
 
         {/* Action Bar */}
         <div className="flex items-center justify-between pt-4 border-t border-slate-50">
