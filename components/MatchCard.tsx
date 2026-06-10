@@ -21,15 +21,6 @@ interface OtherPrediction {
   ptsFinal: number | null;
 }
 
-// Formata horário no timezone local do browser do usuário
-const formatLocalTime = (date: Date): string => {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  }).format(date);
-};
-
 const MatchCard: React.FC<MatchCardProps> = ({
   match,
   lang,
@@ -138,23 +129,23 @@ const MatchCard: React.FC<MatchCardProps> = ({
             {status === 'SCHEDULED' && (
               <div className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full">
                 <span className="text-[10px] font-black uppercase tracking-widest">
-                  {formatLocalTime(startTime)}
+                  {new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }).format(startTime)}
                 </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Score Area */}
-        <div className="flex items-center justify-between gap-4 mb-6">
+        {/* Score Area — gap e tamanho reduzidos para caber em telas ~360px */}
+        <div className="flex items-center justify-between gap-2 mb-6">
           {/* Home */}
           <div className="flex flex-col items-center flex-1">
-            <div className="text-5xl mb-3 drop-shadow-md">{match.homeTeam.flag}</div>
+            <div className="text-4xl mb-2 drop-shadow-md">{match.homeTeam.flag}</div>
             <span className="font-black text-[11px] text-center text-slate-800 uppercase tracking-tight">{match.homeTeam.name[lang]}</span>
           </div>
 
           {/* Center */}
-          <div className="flex flex-col items-center min-w-[120px]">
+          <div className="flex flex-col items-center min-w-[90px] max-w-[110px]">
             {status !== 'SCHEDULED' ? (
               <div className="flex flex-col items-center">
                 <div className="flex items-center gap-4">
@@ -210,7 +201,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
 
           {/* Away */}
           <div className="flex flex-col items-center flex-1">
-            <div className="text-5xl mb-3 drop-shadow-md">{match.awayTeam.flag}</div>
+            <div className="text-4xl mb-2 drop-shadow-md">{match.awayTeam.flag}</div>
             <span className="font-black text-[11px] text-center text-slate-800 uppercase tracking-tight">{match.awayTeam.name[lang]}</span>
           </div>
         </div>
