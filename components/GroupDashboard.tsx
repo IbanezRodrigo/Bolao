@@ -13,8 +13,9 @@ interface GroupDashboardProps {
 
 interface LeaderboardEntry {
   user_id: string;
-  display_name: string;
-  avatar_url: string | null;
+  name: string;
+  surname: string;
+  photo_url: string | null;
   total_points: number;
   exact_scores: number;
 }
@@ -34,12 +35,6 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
   onNavigateToMatches,
   onBack 
 }) => {
-  // DEFENSIVE: Log component mounting
-  console.log('🎯 GroupDashboard MOUNTED');
-  console.log('  - Group ID:', groupId);
-  console.log('  - Current User ID:', currentUserId);
-  console.log('  - Language:', lang);
-
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,19 +43,13 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
 
   const t = TRANSLATIONS[lang];
 
-  // DEFENSIVE: Check for missing groupId
   if (!groupId) {
-    console.error('❌ GroupDashboard: No groupId provided!');
     return (
       <div className="space-y-4 pb-20">
         <div className="flex justify-center items-center py-12">
           <div className="bg-red-50 border-2 border-red-500 rounded-2xl p-8 text-center">
             <p className="text-red-600 font-bold text-lg">⚠️ Error: No Group ID</p>
-            <p className="text-red-500 text-sm mt-2">Cannot load dashboard without a group ID.</p>
-            <button 
-              onClick={onBack}
-              className="mt-4 bg-red-500 text-white px-6 py-2 rounded-xl font-bold"
-            >
+            <button onClick={onBack} className="mt-4 bg-red-500 text-white px-6 py-2 rounded-xl font-bold">
               Go Back
             </button>
           </div>
@@ -78,42 +67,25 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
       setLoading(true);
       setError(null);
 
-      // Fetch group info
       const { data: groupData, error: groupError } = await supabase
         .from('groups')
         .select('id, name, code, description, photo_url')
         .eq('id', groupId)
         .single();
 
-      if (groupError) {
-        console.error('❌ Error fetching group:', groupError);
-        setError('Failed to load group information');
-        return;
-      }
-
+      if (groupError) { setError('Failed to load group information'); return; }
       setGroupInfo(groupData);
 
-      // Fetch leaderboard from view
       const { data: leaderboardData, error: leaderboardError } = await supabase
         .from('leaderboard')
         .select('*')
         .eq('group_id', groupId)
         .order('total_points', { ascending: false });
 
-      if (leaderboardError) {
-        console.error('❌ Error fetching leaderboard:', leaderboardError);
-        setError('Failed to load leaderboard');
-        return;
-      }
-
+      if (leaderboardError) { setError('Failed to load leaderboard'); return; }
       setLeaderboard(leaderboardData || []);
-      console.log('✅ Loaded group dashboard:', {
-        group: groupData.name,
-        members: leaderboardData?.length || 0
-      });
 
     } catch (err: any) {
-      console.error('❌ Unexpected error loading group dashboard:', err);
       setError(err.message || 'Unknown error occurred');
     } finally {
       setLoading(false);
@@ -122,7 +94,6 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
 
   const handleCopyCode = async () => {
     if (!groupInfo) return;
-    
     try {
       await navigator.clipboard.writeText(groupInfo.code);
       setCopiedCode(true);
@@ -133,28 +104,18 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
   };
 
   if (loading) {
-    console.log('⏳ GroupDashboard: Loading state active');
     return (
       <div className="space-y-4 pb-20">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors mb-4"
-        >
+        <button onClick={onBack} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors mb-4">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          <span className="font-bold text-sm">
-            {lang === 'pt' ? 'Voltar' : lang === 'es' ? 'Volver' : 'Back'}
-          </span>
+          <span className="font-bold text-sm">{lang === 'pt' ? 'Voltar' : lang === 'es' ? 'Volver' : 'Back'}</span>
         </button>
-        
         <div className="flex flex-col justify-center items-center py-20">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
           <div className="text-slate-700 font-bold text-lg">
-            {lang === 'pt' ? '🔄 Carregando Dashboard...' : lang === 'es' ? '🔄 Cargando Dashboard...' : '🔄 Loading Dashboard...'}
-          </div>
-          <div className="text-slate-400 text-sm mt-2">
-            Group ID: {groupId}
+            {lang === 'pt' ? '🔄 Carregando...' : lang === 'es' ? '🔄 Cargando...' : '🔄 Loading...'}
           </div>
         </div>
       </div>
@@ -162,33 +123,18 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
   }
 
   if (error || !groupInfo) {
-    console.error('❌ GroupDashboard: Error or no group info');
-    console.error('  - Error:', error);
-    console.error('  - GroupInfo:', groupInfo);
     return (
       <div className="space-y-4 pb-20">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors mb-4"
-        >
+        <button onClick={onBack} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors mb-4">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          <span className="font-bold text-sm">
-            {lang === 'pt' ? 'Voltar' : lang === 'es' ? 'Volver' : 'Back'}
-          </span>
+          <span className="font-bold text-sm">{lang === 'pt' ? 'Voltar' : lang === 'es' ? 'Volver' : 'Back'}</span>
         </button>
         <div className="flex justify-center items-center py-12">
           <div className="bg-red-50 border-2 border-red-500 rounded-2xl p-8 text-center max-w-md">
             <p className="text-red-600 font-bold text-lg mb-2">⚠️ {error || 'Group not found'}</p>
-            <p className="text-red-500 text-sm">Group ID: {groupId}</p>
-            <button
-              onClick={() => {
-                console.log('🔄 Retrying fetch...');
-                fetchGroupData();
-              }}
-              className="mt-4 bg-red-500 text-white px-6 py-2 rounded-xl font-bold hover:bg-red-600"
-            >
+            <button onClick={fetchGroupData} className="mt-4 bg-red-500 text-white px-6 py-2 rounded-xl font-bold hover:bg-red-600">
               {lang === 'pt' ? 'Tentar Novamente' : lang === 'es' ? 'Intentar de Nuevo' : 'Try Again'}
             </button>
           </div>
@@ -200,18 +146,10 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
   const currentUserRank = leaderboard.findIndex(entry => entry.user_id === currentUserId);
   const currentUserEntry = currentUserRank >= 0 ? leaderboard[currentUserRank] : null;
 
-  console.log('✅ GroupDashboard: Rendering successfully');
-  console.log('  - Group:', groupInfo.name);
-  console.log('  - Members:', leaderboard.length);
-  console.log('  - Current User Rank:', currentUserRank + 1);
-
   return (
     <div className="space-y-6 pb-20">
       {/* Back Button */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
-      >
+      <button onClick={onBack} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors">
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
@@ -222,14 +160,11 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
 
       {/* Group Header */}
       <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden">
-        {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-white blur-3xl -translate-y-1/2 translate-x-1/2"></div>
           <div className="absolute bottom-0 left-0 w-64 h-64 rounded-full bg-white blur-3xl translate-y-1/2 -translate-x-1/2"></div>
         </div>
-
         <div className="relative z-10 space-y-4">
-          {/* Group Name */}
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <h1 className="text-3xl font-black tracking-tight mb-1">{groupInfo.name}</h1>
@@ -238,11 +173,7 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
               )}
             </div>
             {groupInfo.photo_url && (
-              <img 
-                src={groupInfo.photo_url} 
-                alt={groupInfo.name}
-                className="w-16 h-16 rounded-2xl border-2 border-white/30 shadow-lg object-cover"
-              />
+              <img src={groupInfo.photo_url} alt={groupInfo.name} className="w-16 h-16 rounded-2xl border-2 border-white/30 shadow-lg object-cover" />
             )}
           </div>
 
@@ -312,11 +243,7 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
               {lang === 'pt' ? 'Convide Amigos!' : lang === 'es' ? '¡Invita Amigos!' : 'Invite Friends!'}
             </h3>
             <p className="text-blue-600 text-sm max-w-xs mx-auto">
-              {lang === 'pt' 
-                ? 'Compartilhe o código do grupo para começar a competição!' 
-                : lang === 'es'
-                ? '¡Comparte el código del grupo para comenzar la competencia!'
-                : 'Share the group code to start the competition!'}
+              {lang === 'pt' ? 'Compartilhe o código do grupo para começar a competição!' : lang === 'es' ? '¡Comparte el código del grupo para comenzar la competencia!' : 'Share the group code to start the competition!'}
             </p>
           </div>
         ) : (
@@ -324,13 +251,12 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
             {leaderboard.map((entry, index) => {
               const isCurrentUser = entry.user_id === currentUserId;
               const rank = index + 1;
-              
               return (
                 <div
                   key={entry.user_id}
                   className={`flex items-center gap-4 p-4 rounded-2xl transition-all ${
-                    isCurrentUser 
-                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-500 shadow-lg scale-[1.02]' 
+                    isCurrentUser
+                      ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-500 shadow-lg scale-[1.02]'
                       : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md'
                   }`}
                 >
@@ -359,7 +285,7 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
                   {/* Name */}
                   <div className="flex-1 min-w-0">
                     <p className={`font-black text-sm truncate ${isCurrentUser ? 'text-blue-900' : 'text-slate-900'}`}>
-                      {`${entry.name} ${entry.surname}`}
+                      {entry.name} {entry.surname}
                       {isCurrentUser && (
                         <span className="ml-2 text-[10px] bg-blue-500 text-white px-2 py-0.5 rounded-full">
                           {lang === 'pt' ? 'VOCÊ' : lang === 'es' ? 'TÚ' : 'YOU'}
@@ -376,9 +302,7 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
                     <p className={`text-2xl font-black ${isCurrentUser ? 'text-blue-600' : 'text-slate-900'}`}>
                       {entry.total_points}
                     </p>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                      {lang === 'pt' ? 'pts' : lang === 'es' ? 'pts' : 'pts'}
-                    </p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">pts</p>
                   </div>
                 </div>
               );
@@ -387,7 +311,7 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
         )}
       </div>
 
-      {/* Current User Summary (if not in top visible) */}
+      {/* Current User Summary (se não estiver no top 5) */}
       {currentUserEntry && currentUserRank >= 5 && (
         <div className="sticky bottom-20 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl p-4 shadow-2xl border-2 border-white">
           <div className="flex items-center justify-between">
@@ -399,7 +323,7 @@ const GroupDashboard: React.FC<GroupDashboardProps> = ({
                 <p className="font-black text-sm">
                   {lang === 'pt' ? 'Sua Posição' : lang === 'es' ? 'Tu Posición' : 'Your Position'}
                 </p>
-                <p className="text-xs text-blue-100">{currentUser`${entry.name} ${entry.surname}`}</p>
+                <p className="text-xs text-blue-100">{currentUserEntry.name} {currentUserEntry.surname}</p>
               </div>
             </div>
             <div className="text-right">
