@@ -10,7 +10,6 @@ const FOOTBALL_API_BASE = 'https://api.football-data.org/v4'
 const WC_2026_ID = 2000
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Aceita tanto "Authorization: Bearer <secret>" quanto "x-cron-secret: <secret>"
   const authHeader = req.headers['authorization']
   const cronHeader = req.headers['x-cron-secret']
   const secret = process.env.CRON_SECRET
@@ -26,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
 
-    // Busca jogos pendentes de resultado (já passaram 2h do início)
+    // Jogos pendentes: ainda não FINISHED e já começaram (passou start_time)
     const { data: pendingMatches, error: pendingError } = await supabase
       .from('matches')
       .select('id, external_id, home_team_id, away_team_id, start_time, status')
@@ -35,7 +34,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (pendingError) throw pendingError
 
-    // Busca jogos com equipas TBD que ainda não começaram
+    // Jogos que começaram há menos de 2h (podem estar LIVE agora)
+    const now = new Date().toISOString()
+    const { data: liveMatches, error: liveError } = await supabase
+      .from('matches')
+      .select('id, external_id, home_team_id, away_team_id, start_time, status')
+      .neq('status', 'FINISHED')
+      .lt('start_time', now)
+      .gte('start_time', twoHoursAgo)
+
+    if (liveError) throw liveError
+
+    // Jogos com times TBD
     const { data: tbdMatches, error: tbdError } = await supabase
       .from('matches')
       .select('id, external_id, home_team_id, away_team_id, phase')
@@ -44,33 +54,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (tbdError) throw tbdError
 
-    // Se não há nada para sincronizar, retorna 200 sem chamar a API externa
-    const hasPending = (pendingMatches?.length ?? 0) > 0
+    const allPending = [...(pendingMatches || []), ...(liveMatches || [])]
+    const hasPending = allPending.length > 0
     const hasTbd = (tbdMatches?.length ?? 0) > 0
 
     if (!hasPending && !hasTbd) {
       return res.json({
         synced: 0,
+        live_updated: 0,
         teams_updated: 0,
         total_pending: 0,
+        total_live: 0,
         total_tbd: 0,
         message: 'Nothing to sync'
       })
     }
 
-    // Busca TODOS os jogos da Copa na API externa
     const apiRes = await fetch(
       `${FOOTBALL_API_BASE}/competitions/${WC_2026_ID}/matches`,
       { headers: { 'X-Auth-Token': process.env.FOOTBALL_DATA_API_KEY! } }
     )
 
     if (!apiRes.ok) {
-      // API externa falhou — retorna 200 com aviso em vez de 500
       console.error(`Football API error: ${apiRes.status}`)
       return res.json({
         synced: 0,
+        live_updated: 0,
         teams_updated: 0,
-        total_pending: pendingMatches?.length ?? 0,
+        total_pending: allPending.length,
         total_tbd: tbdMatches?.length ?? 0,
         warning: `Football API returned ${apiRes.status} — skipped`
       })
@@ -78,41 +89,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const apiData = await apiRes.json()
     const allApiMatches: any[] = apiData.matches || []
-    const finishedApiMatches = allApiMatches.filter((m: any) => m.status === 'FINISHED')
 
     let synced = 0
+    let liveUpdated = 0
     let teamsUpdated = 0
 
-    // 1 — Actualizar resultados dos jogos terminados
-    for (const pending of (pendingMatches || [])) {
-      const apiMatch = finishedApiMatches.find(
+    // 1 — Atualizar jogos FINISHED e LIVE/IN_PLAY
+    for (const pending of allPending) {
+      const apiMatch = allApiMatches.find(
         (m: any) => String(m.id) === String(pending.external_id)
       )
       if (!apiMatch) continue
 
-      const updatePayload: any = {
-        status: 'FINISHED',
-        actual_home_score: apiMatch.score.fullTime.home,
-        actual_away_score: apiMatch.score.fullTime.away,
-        updated_at: new Date().toISOString()
-      }
+      const apiStatus = apiMatch.status // FINISHED | IN_PLAY | PAUSED | HALFTIME
 
-      if (pending.home_team_id === 'TBD' && apiMatch.homeTeam?.tla) {
-        updatePayload.home_team_id = apiMatch.homeTeam.tla
-      }
-      if (pending.away_team_id === 'TBD' && apiMatch.awayTeam?.tla) {
-        updatePayload.away_team_id = apiMatch.awayTeam.tla
-      }
+      if (apiStatus === 'FINISHED') {
+        // Jogo terminou — salva placar final
+        const updatePayload: any = {
+          status: 'FINISHED',
+          actual_home_score: apiMatch.score.fullTime.home,
+          actual_away_score: apiMatch.score.fullTime.away,
+          updated_at: new Date().toISOString()
+        }
 
-      const { error: updateError } = await supabase
-        .from('matches')
-        .update(updatePayload)
-        .eq('id', pending.id)
+        if (pending.home_team_id === 'TBD' && apiMatch.homeTeam?.tla) {
+          updatePayload.home_team_id = apiMatch.homeTeam.tla
+        }
+        if (pending.away_team_id === 'TBD' && apiMatch.awayTeam?.tla) {
+          updatePayload.away_team_id = apiMatch.awayTeam.tla
+        }
 
-      if (!updateError) synced++
+        const { error } = await supabase
+          .from('matches')
+          .update(updatePayload)
+          .eq('id', pending.id)
+
+        if (!error) synced++
+
+      } else if (['IN_PLAY', 'PAUSED', 'HALFTIME'].includes(apiStatus)) {
+        // Jogo ao vivo — salva placar parcial e muda status para LIVE
+        const homeScore = apiMatch.score?.fullTime?.home ?? apiMatch.score?.halfTime?.home ?? null
+        const awayScore = apiMatch.score?.fullTime?.away ?? apiMatch.score?.halfTime?.away ?? null
+
+        const updatePayload: any = {
+          status: 'LIVE',
+          updated_at: new Date().toISOString()
+        }
+
+        // Só salva placar se a API retornou valores válidos
+        if (homeScore !== null) updatePayload.actual_home_score = homeScore
+        if (awayScore !== null) updatePayload.actual_away_score = awayScore
+
+        const { error } = await supabase
+          .from('matches')
+          .update(updatePayload)
+          .eq('id', pending.id)
+
+        if (!error) liveUpdated++
+      }
     }
 
-    // 2 — Actualizar equipas TBD em jogos futuros que a API já conhece
+    // 2 — Atualizar times TBD em jogos futuros
     for (const tbd of (tbdMatches || [])) {
       const apiMatch = allApiMatches.find(
         (m: any) => String(m.id) === String(tbd.external_id)
@@ -136,18 +173,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatePayload.away_team_id = awayTla
       }
 
-      const { error: tbdUpdateError } = await supabase
+      const { error } = await supabase
         .from('matches')
         .update(updatePayload)
         .eq('id', tbd.id)
 
-      if (!tbdUpdateError) teamsUpdated++
+      if (!error) teamsUpdated++
     }
 
     return res.json({
       synced,
+      live_updated: liveUpdated,
       teams_updated: teamsUpdated,
       total_pending: pendingMatches?.length ?? 0,
+      total_live: liveMatches?.length ?? 0,
       total_tbd: tbdMatches?.length ?? 0
     })
 
