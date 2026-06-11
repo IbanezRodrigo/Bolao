@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { supabase } from '../supabase';
@@ -19,28 +19,27 @@ interface LeaderboardEntry {
   total_predictions: number;
 }
 
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+
 const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const t = TRANSLATIONS[lang];
 
-  useEffect(() => {
-    if (!groupId) { setLoading(false); return; }
-    fetchLeaderboard();
-  }, [groupId]);
-
-  const fetchLeaderboard = async () => {
+  const fetchLeaderboard = useCallback(async (silent = false) => {
     if (!groupId) return;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
+
       const { data, error: fetchError } = await supabase
         .from('leaderboard')
         .select('*')
         .eq('group_id', groupId)
         .order('total_points', { ascending: false });
+
       if (fetchError) throw fetchError;
       setEntries(data || []);
     } catch (err: any) {
@@ -48,7 +47,19 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [groupId]);
+
+  useEffect(() => {
+    if (!groupId) { setLoading(false); return; }
+
+    fetchLeaderboard(false); // primeira carga com spinner
+
+    intervalRef.current = setInterval(() => fetchLeaderboard(true), REFRESH_INTERVAL_MS); // refresh silencioso
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [groupId, fetchLeaderboard]);
 
   const medalEmoji = (pos: number) => {
     if (pos === 1) return '🥇';
@@ -68,7 +79,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
         </span>
       </div>
 
-      {/* Loading */}
+      {/* Loading (primeira carga) */}
       {loading && (
         <div className="flex justify-center items-center py-12">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
