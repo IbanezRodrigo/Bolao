@@ -40,7 +40,7 @@ const groupMatchesByPhaseAndDate = (matches: Match[]): Record<string, Record<str
   matches.forEach(m => {
     const phase = (m.phase || 'GROUP') as Phase;
     if (!result[phase]) result[phase] = {};
-    const dateKey = getLocalDateKey(m.startTime); // usa local, não UTC
+    const dateKey = getLocalDateKey(m.startTime);
     if (!result[phase][dateKey]) result[phase][dateKey] = [];
     result[phase][dateKey].push(m);
   });
@@ -173,7 +173,7 @@ const MatchList: React.FC<MatchListProps> = ({ lang, groupId }) => {
                   </button>
 
                   {openFinishedPhases[phase] && (
-                    <div className="px-4 pb-4 space-y-4">
+                    <div className="px-3 pb-4 space-y-4">
                       {Object.keys(finishedByPhase[phase])
                         .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
                         .map(dateKey => (
@@ -238,7 +238,7 @@ const MatchList: React.FC<MatchListProps> = ({ lang, groupId }) => {
                 </button>
 
                 {openUpcomingPhases[phase] && (
-                  <div className="px-4 pb-4 space-y-4">
+                  <div className="px-3 pb-4 space-y-4">
                     {Object.keys(upcomingByPhase[phase])
                       .sort()
                       .map(dateKey => (
