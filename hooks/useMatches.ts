@@ -40,15 +40,17 @@ const dbTeamToFrontend = (t: DBTeam): Team => ({
   color: t.color,
 });
 
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+
 export const useMatches = (): UseMatchesReturn => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchMatches = async () => {
+    const fetchMatches = async (silent = false) => {
       try {
-        setLoading(true);
+        if (!silent) setLoading(true);
         setError(null);
 
         const { data, error: fetchError } = await supabase
@@ -69,17 +71,17 @@ export const useMatches = (): UseMatchesReturn => {
         if (!data) { setMatches([]); return; }
 
         const transformed: Match[] = data.map((m: DBMatch) => ({
-          id:               m.id,
-          homeTeam:         dbTeamToFrontend(m.home_team),
-          awayTeam:         dbTeamToFrontend(m.away_team),
-          startTime:        m.start_time,
-          venue:            m.venue || '',
-          group:            m.match_group || '',
-          phase:            m.phase || 'GROUP',
-          actualHomeScore:  m.actual_home_score ?? undefined,
-          actualAwayScore:  m.actual_away_score ?? undefined,
-          status:           m.status || 'SCHEDULED',
-          externalId:       m.external_id || undefined,
+          id:              m.id,
+          homeTeam:        dbTeamToFrontend(m.home_team),
+          awayTeam:        dbTeamToFrontend(m.away_team),
+          startTime:       m.start_time,
+          venue:           m.venue || '',
+          group:           m.match_group || '',
+          phase:           m.phase || 'GROUP',
+          actualHomeScore: m.actual_home_score ?? undefined,
+          actualAwayScore: m.actual_away_score ?? undefined,
+          status:          m.status || 'SCHEDULED',
+          externalId:      m.external_id || undefined,
         }));
 
         console.log(`✅ Fetched ${transformed.length} matches`);
@@ -92,7 +94,11 @@ export const useMatches = (): UseMatchesReturn => {
       }
     };
 
-    fetchMatches();
+    fetchMatches(false); // primeira carga com spinner
+
+    const interval = setInterval(() => fetchMatches(true), REFRESH_INTERVAL_MS); // refresh silencioso
+
+    return () => clearInterval(interval);
   }, []);
 
   return { matches, loading, error };
