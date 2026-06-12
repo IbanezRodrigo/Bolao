@@ -156,7 +156,7 @@ const App: React.FC = () => {
     if (data.session) {
       await loadUserProfile(data.user.id, registerEmail);
       setShowProfileSetup(true);
-    } else {
+      } else {
       alert(`✅ Registo bem-sucedido!\n\nVerifica o teu email: ${registerEmail}\nClica no link para confirmar o registo.`);
     }
   };
@@ -335,7 +335,12 @@ const App: React.FC = () => {
               />
             )}
             {activeTab === 'rules' && (
-              <Rules lang={lang} scoringConfig={scoringRules} />
+              <Rules
+                lang={lang}
+                scoringConfig={scoringRules}
+                groupId={activeGroupId ?? undefined}
+                currentUserId={user.id}
+              />
             )}
           </div>
         )}
