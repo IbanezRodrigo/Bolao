@@ -88,7 +88,7 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig, groupId, currentUser
 
   const prize1 = Math.round(prizePool * 0.6);
   const prize2 = Math.round(prizePool * 0.25);
-  const prize3 = Math.round(prizePool * 0.15);
+  const prize3 = prizePool - prize1 - prize2;
 
   const scenarios = [
     {
