@@ -40,7 +40,7 @@ const dbTeamToFrontend = (t: DBTeam): Team => ({
   color: t.color,
 });
 
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+const REFRESH_INTERVAL_MS = 1 * 60 * 1000; // 5 minutos
 
 export const useMatches = (): UseMatchesReturn => {
   const [matches, setMatches] = useState<Match[]>([]);
