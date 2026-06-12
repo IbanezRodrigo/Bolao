@@ -25,15 +25,25 @@ const Rules: React.FC<RulesProps> = ({ lang, scoringConfig, groupId, currentUser
     if (!groupId || !currentUserId) return;
 
     const fetchGroupData = async () => {
-      const { data } = await supabase
+      // Busca prize_pool do grupo
+      const { data: groupData } = await supabase
         .from('groups')
-        .select('prize_pool, owner_user_id')
+        .select('prize_pool')
         .eq('id', groupId)
         .single();
 
-      if (data) {
-        setPrizePool(data.prize_pool ?? 0);
-        setIsAdmin(data.owner_user_id === currentUserId);
+      if (groupData) setPrizePool(groupData.prize_pool ?? 0);
+
+      // Verifica role do user nesse grupo
+      const { data: roleData } = await supabase
+        .from('user_groups')
+        .select('role')
+        .eq('group_id', groupId)
+        .eq('user_id', currentUserId)
+        .single();
+
+      if (roleData) {
+        setIsAdmin(roleData.role === 'OWNER' || roleData.role === 'ADMIN');
       }
     };
 
