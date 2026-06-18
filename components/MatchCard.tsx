@@ -223,7 +223,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
       if (error) { console.error('❌ Error fetching others:', error); return; }
 
       const mapped: OtherPrediction[] = (data || []).map((d: any) => ({
-        name: `${d.profiles.name} ${d.profiles.surname?.[0] || ''}.`,
+        name: `${d.profiles.name} ${d.profiles.surname || ''}`.trim(),
         homeScore: d.home_score,
         awayScore: d.away_score,
         ptsFinal: d.pts_final,
