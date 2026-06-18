@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { supabase } from '../supabase';
+import GroupTable from './GroupTable';
 
 interface LeaderboardProps {
   lang: Language;
@@ -25,6 +26,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'ranking' | 'table'>('ranking');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const t = TRANSLATIONS[lang];
 
@@ -72,27 +74,57 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
     <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
 
       {/* Header */}
-      <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-        <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em]">{t.ranking}</h3>
-        <span className="text-[10px] font-black bg-blue-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">
-          {entries.length} {entries.length === 1 ? 'membro' : 'membros'}
-        </span>
+      <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em]">{t.ranking}</h3>
+          {activeView === 'ranking' && (
+            <span className="text-[10px] font-black bg-blue-600 text-white px-3 py-1 rounded-full uppercase tracking-widest">
+              {entries.length} {entries.length === 1 ? 'membro' : 'membros'}
+            </span>
+          )}
+        </div>
+        {/* Pill toggle */}
+        <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+          <button
+            onClick={() => setActiveView('ranking')}
+            className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+              activeView === 'ranking' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'
+            }`}
+          >
+            {t.ranking}
+          </button>
+          <button
+            onClick={() => setActiveView('table')}
+            className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+              activeView === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'
+            }`}
+          >
+            {lang === 'pt' ? 'Tabela' : lang === 'es' ? 'Tabla' : 'Table'}
+          </button>
+        </div>
       </div>
 
+      {/* Table view */}
+      {activeView === 'table' && (
+        <div className="p-4">
+          <GroupTable lang={lang} />
+        </div>
+      )}
+
       {/* Loading (primeira carga) */}
-      {loading && (
+      {activeView === 'ranking' && loading && (
         <div className="flex justify-center items-center py-12">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
       )}
 
       {/* Error */}
-      {error && (
+      {activeView === 'ranking' && error && (
         <div className="p-6 text-center text-red-500 text-sm font-bold">{error}</div>
       )}
 
       {/* Empty */}
-      {!loading && !error && entries.length === 0 && (
+      {activeView === 'ranking' && !loading && !error && entries.length === 0 && (
         <div className="p-12 text-center">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,7 +138,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
       )}
 
       {/* Column headers */}
-      {!loading && !error && entries.length > 0 && (
+      {activeView === 'ranking' && !loading && !error && entries.length > 0 && (
         <div>
           <div className="flex items-center px-4 py-2 border-b border-slate-100">
             <span className="w-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Pos</span>
