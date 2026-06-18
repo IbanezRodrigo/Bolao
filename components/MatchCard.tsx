@@ -427,7 +427,7 @@ const MatchCard: React.FC<MatchCardProps> = ({
               </p>
             ) : (
               <div className="space-y-2">
-                {others.length > 0 ? others.map((o, idx) => (
+                {others.length > 0 ? (status === 'FINISHED' ? [...others].sort((a, b) => (b.ptsFinal ?? 0) - (a.ptsFinal ?? 0)) : others).map((o, idx) => (
                   <div key={idx} className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-100">
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-md bg-slate-200 flex items-center justify-center text-[8px] font-black text-slate-500">
