@@ -114,6 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let liveUpdated = 0
     let teamsUpdated = 0
     let skippedNullScore = 0
+    let skippedTeamMismatch = 0
 
     // 1 — Jogos terminados: só grava se placar vier válido
     for (const pending of (pendingMatches || [])) {
@@ -121,6 +122,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (m: any) => String(m.id) === String(pending.external_id)
       )
       if (!apiMatch) continue
+
+      // Guard: verify teams match before writing any score.
+      // Catches swapped external_ids (e.g. FRA row holding NOR's external_id).
+      // Skip TBD slots — those are resolved by the TBD loop below.
+      const apiHome = apiMatch.homeTeam?.tla
+      const apiAway = apiMatch.awayTeam?.tla
+      const homeOk = pending.home_team_id === 'TBD' || !apiHome || apiHome === pending.home_team_id
+      const awayOk = pending.away_team_id === 'TBD' || !apiAway || apiAway === pending.away_team_id
+      if (!homeOk || !awayOk) {
+        skippedTeamMismatch++
+        console.error(
+          `❌ Team mismatch on external_id ${pending.external_id}: ` +
+          `DB expects ${pending.home_team_id} vs ${pending.away_team_id}, ` +
+          `API returned ${apiHome} vs ${apiAway} — skipping to prevent wrong score`
+        )
+        continue
+      }
 
       const { home, away } = extractScore(apiMatch.score)
 
@@ -162,6 +180,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const liveStatuses = ['IN_PLAY', 'PAUSED', 'HALFTIME', 'LIVE']
       if (!liveStatuses.includes(apiMatch.status)) continue
+
+      // Guard: same team mismatch check as the FINISHED loop
+      const apiHomeLive = apiMatch.homeTeam?.tla
+      const apiAwayLive = apiMatch.awayTeam?.tla
+      const homeOkLive = live.home_team_id === 'TBD' || !apiHomeLive || apiHomeLive === live.home_team_id
+      const awayOkLive = live.away_team_id === 'TBD' || !apiAwayLive || apiAwayLive === live.away_team_id
+      if (!homeOkLive || !awayOkLive) {
+        skippedTeamMismatch++
+        console.error(
+          `❌ Team mismatch (LIVE) on external_id ${live.external_id}: ` +
+          `DB expects ${live.home_team_id} vs ${live.away_team_id}, ` +
+          `API returned ${apiHomeLive} vs ${apiAwayLive} — skipping to prevent wrong score`
+        )
+        continue
+      }
 
       const { home, away } = extractScore(apiMatch.score)
 
@@ -218,6 +251,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       live_updated: liveUpdated,
       teams_updated: teamsUpdated,
       skipped_null_score: skippedNullScore,
+      skipped_team_mismatch: skippedTeamMismatch,
       total_pending: pendingMatches?.length ?? 0,
       total_live: liveMatches?.length ?? 0,
       total_tbd: tbdMatches?.length ?? 0
