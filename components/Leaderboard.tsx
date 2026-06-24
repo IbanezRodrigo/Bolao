@@ -3,6 +3,7 @@ import { Language } from '../types';
 import { TRANSLATIONS } from '../constants';
 import { supabase } from '../supabase';
 import GroupTable from './GroupTable';
+import KnockoutBracket from './KnockoutBracket';
 
 interface LeaderboardProps {
   lang: Language;
@@ -26,7 +27,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'ranking' | 'table'>('ranking');
+  const [activeView, setActiveView] = useState<'ranking' | 'table' | 'knockout'>('ranking');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const t = TRANSLATIONS[lang];
 
@@ -101,6 +102,14 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
           >
             {lang === 'pt' ? 'Tabela' : lang === 'es' ? 'Tabla' : 'Table'}
           </button>
+          <button
+            onClick={() => setActiveView('knockout')}
+            className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+              activeView === 'knockout' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'
+            }`}
+          >
+            {lang === 'pt' ? 'Mata-mata' : lang === 'es' ? 'Mata-mata' : 'Knockout'}
+          </button>
         </div>
       </div>
 
@@ -108,6 +117,13 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
       {activeView === 'table' && (
         <div className="p-4">
           <GroupTable lang={lang} />
+        </div>
+      )}
+
+      {/* Knockout view */}
+      {activeView === 'knockout' && (
+        <div className="p-4">
+          <KnockoutBracket lang={lang} />
         </div>
       )}
 
