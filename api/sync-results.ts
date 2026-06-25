@@ -115,29 +115,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let teamsUpdated = 0
     let skippedNullScore = 0
     let skippedTeamMismatch = 0
+    let fixedExternalId = 0
 
     // 1 — Jogos terminados: só grava se placar vier válido
     for (const pending of (pendingMatches || [])) {
-      const apiMatch = finishedApiMatches.find(
+      let apiMatch = finishedApiMatches.find(
         (m: any) => String(m.id) === String(pending.external_id)
       )
       if (!apiMatch) continue
 
       // Guard: verify teams match before writing any score.
-      // Catches swapped external_ids (e.g. FRA row holding NOR's external_id).
+      // If there's a mismatch, try to find the correct API match by TLA and auto-fix the external_id.
       // Skip TBD slots — those are resolved by the TBD loop below.
-      const apiHome = apiMatch.homeTeam?.tla
-      const apiAway = apiMatch.awayTeam?.tla
-      const homeOk = pending.home_team_id === 'TBD' || !apiHome || apiHome === pending.home_team_id
-      const awayOk = pending.away_team_id === 'TBD' || !apiAway || apiAway === pending.away_team_id
-      if (!homeOk || !awayOk) {
-        skippedTeamMismatch++
-        console.error(
-          `❌ Team mismatch on external_id ${pending.external_id}: ` +
-          `DB expects ${pending.home_team_id} vs ${pending.away_team_id}, ` +
-          `API returned ${apiHome} vs ${apiAway} — skipping to prevent wrong score`
-        )
-        continue
+      if (pending.home_team_id !== 'TBD' && pending.away_team_id !== 'TBD') {
+        const apiHome = apiMatch.homeTeam?.tla
+        const apiAway = apiMatch.awayTeam?.tla
+        const homeOk = !apiHome || apiHome === pending.home_team_id
+        const awayOk = !apiAway || apiAway === pending.away_team_id
+
+        if (!homeOk || !awayOk) {
+          const correctMatch = finishedApiMatches.find(
+            (m: any) => m.homeTeam?.tla === pending.home_team_id && m.awayTeam?.tla === pending.away_team_id
+          )
+          if (correctMatch) {
+            await supabase.from('matches').update({ external_id: String(correctMatch.id) }).eq('id', pending.id)
+            console.warn(
+              `⚠️ Auto-fixed swapped external_id for ${pending.home_team_id} vs ${pending.away_team_id}: ` +
+              `${pending.external_id} → ${correctMatch.id}`
+            )
+            apiMatch = correctMatch
+            fixedExternalId++
+          } else {
+            skippedTeamMismatch++
+            console.error(
+              `❌ Team mismatch on external_id ${pending.external_id}: ` +
+              `DB expects ${pending.home_team_id} vs ${pending.away_team_id}, ` +
+              `API returned ${apiHome} vs ${apiAway} — no correct match found, skipping`
+            )
+            continue
+          }
+        }
       }
 
       const { home, away } = extractScore(apiMatch.score)
@@ -173,7 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2 — Jogos LIVE: salva placar parcial
     for (const live of (liveMatches || [])) {
-      const apiMatch = allApiMatches.find(
+      let apiMatch = allApiMatches.find(
         (m: any) => String(m.id) === String(live.external_id)
       )
       if (!apiMatch) continue
@@ -181,19 +198,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const liveStatuses = ['IN_PLAY', 'PAUSED', 'HALFTIME', 'LIVE']
       if (!liveStatuses.includes(apiMatch.status)) continue
 
-      // Guard: same team mismatch check as the FINISHED loop
-      const apiHomeLive = apiMatch.homeTeam?.tla
-      const apiAwayLive = apiMatch.awayTeam?.tla
-      const homeOkLive = live.home_team_id === 'TBD' || !apiHomeLive || apiHomeLive === live.home_team_id
-      const awayOkLive = live.away_team_id === 'TBD' || !apiAwayLive || apiAwayLive === live.away_team_id
-      if (!homeOkLive || !awayOkLive) {
-        skippedTeamMismatch++
-        console.error(
-          `❌ Team mismatch (LIVE) on external_id ${live.external_id}: ` +
-          `DB expects ${live.home_team_id} vs ${live.away_team_id}, ` +
-          `API returned ${apiHomeLive} vs ${apiAwayLive} — skipping to prevent wrong score`
-        )
-        continue
+      // Guard: same team mismatch check as the FINISHED loop, with auto-fix
+      if (live.home_team_id !== 'TBD' && live.away_team_id !== 'TBD') {
+        const apiHomeLive = apiMatch.homeTeam?.tla
+        const apiAwayLive = apiMatch.awayTeam?.tla
+        const homeOkLive = !apiHomeLive || apiHomeLive === live.home_team_id
+        const awayOkLive = !apiAwayLive || apiAwayLive === live.away_team_id
+
+        if (!homeOkLive || !awayOkLive) {
+          const correctMatch = allApiMatches.find(
+            (m: any) => m.homeTeam?.tla === live.home_team_id && m.awayTeam?.tla === live.away_team_id
+          )
+          if (correctMatch) {
+            await supabase.from('matches').update({ external_id: String(correctMatch.id) }).eq('id', live.id)
+            console.warn(
+              `⚠️ Auto-fixed swapped external_id (LIVE) for ${live.home_team_id} vs ${live.away_team_id}: ` +
+              `${live.external_id} → ${correctMatch.id}`
+            )
+            apiMatch = correctMatch
+            fixedExternalId++
+          } else {
+            skippedTeamMismatch++
+            console.error(
+              `❌ Team mismatch (LIVE) on external_id ${live.external_id}: ` +
+              `DB expects ${live.home_team_id} vs ${live.away_team_id}, ` +
+              `API returned ${apiHomeLive} vs ${apiAwayLive} — no correct match found, skipping`
+            )
+            continue
+          }
+        }
       }
 
       const { home, away } = extractScore(apiMatch.score)
@@ -252,6 +285,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       teams_updated: teamsUpdated,
       skipped_null_score: skippedNullScore,
       skipped_team_mismatch: skippedTeamMismatch,
+      fixed_external_id: fixedExternalId,
       total_pending: pendingMatches?.length ?? 0,
       total_live: liveMatches?.length ?? 0,
       total_tbd: tbdMatches?.length ?? 0
