@@ -127,6 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Guard: verify teams match before writing any score.
       // If there's a mismatch, try to find the correct API match by TLA and auto-fix the external_id.
       // Skip TBD slots — those are resolved by the TBD loop below.
+      let scoresSwapped = false
       if (pending.home_team_id !== 'TBD' && pending.away_team_id !== 'TBD') {
         const apiHome = apiMatch.homeTeam?.tla
         const apiAway = apiMatch.awayTeam?.tla
@@ -146,18 +147,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             apiMatch = correctMatch
             fixedExternalId++
           } else {
-            skippedTeamMismatch++
-            console.error(
-              `❌ Team mismatch on external_id ${pending.external_id}: ` +
-              `DB expects ${pending.home_team_id} vs ${pending.away_team_id}, ` +
-              `API returned ${apiHome} vs ${apiAway} — no correct match found, skipping`
+            // Check if DB has teams in reversed order vs the API (home/away swapped at insertion time).
+            // If so, use the API match as-is but swap the scores so they align with the DB's home/away.
+            const swappedMatch = finishedApiMatches.find(
+              (m: any) => m.homeTeam?.tla === pending.away_team_id && m.awayTeam?.tla === pending.home_team_id
             )
-            continue
+            if (swappedMatch) {
+              apiMatch = swappedMatch
+              scoresSwapped = true
+              console.warn(
+                `⚠️ Teams stored in reversed order for match ${pending.external_id}: ` +
+                `DB home=${pending.home_team_id} away=${pending.away_team_id} but API home=${apiHome} away=${apiAway}. ` +
+                `Syncing with swapped scores.`
+              )
+            } else {
+              skippedTeamMismatch++
+              console.error(
+                `❌ Team mismatch on external_id ${pending.external_id}: ` +
+                `DB expects ${pending.home_team_id} vs ${pending.away_team_id}, ` +
+                `API returned ${apiHome} vs ${apiAway} — no correct match found, skipping`
+              )
+              continue
+            }
           }
         }
       }
 
-      const { home, away } = extractScore(apiMatch.score)
+      const { home: rawHome, away: rawAway } = extractScore(apiMatch.score)
+      const home = scoresSwapped ? rawAway : rawHome
+      const away = scoresSwapped ? rawHome : rawAway
 
       // Se placar ainda nulo, não grava — aguarda próximo cron
       if (home === null || away === null) {
@@ -199,6 +217,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!liveStatuses.includes(apiMatch.status)) continue
 
       // Guard: same team mismatch check as the FINISHED loop, with auto-fix
+      let liveScoresSwapped = false
       if (live.home_team_id !== 'TBD' && live.away_team_id !== 'TBD') {
         const apiHomeLive = apiMatch.homeTeam?.tla
         const apiAwayLive = apiMatch.awayTeam?.tla
@@ -218,18 +237,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             apiMatch = correctMatch
             fixedExternalId++
           } else {
-            skippedTeamMismatch++
-            console.error(
-              `❌ Team mismatch (LIVE) on external_id ${live.external_id}: ` +
-              `DB expects ${live.home_team_id} vs ${live.away_team_id}, ` +
-              `API returned ${apiHomeLive} vs ${apiAwayLive} — no correct match found, skipping`
+            const swappedMatch = allApiMatches.find(
+              (m: any) => m.homeTeam?.tla === live.away_team_id && m.awayTeam?.tla === live.home_team_id
             )
-            continue
+            if (swappedMatch) {
+              apiMatch = swappedMatch
+              liveScoresSwapped = true
+              console.warn(
+                `⚠️ Teams stored in reversed order (LIVE) for match ${live.external_id}: ` +
+                `DB home=${live.home_team_id} away=${live.away_team_id} but API home=${apiHomeLive} away=${apiAwayLive}. ` +
+                `Syncing with swapped scores.`
+              )
+            } else {
+              skippedTeamMismatch++
+              console.error(
+                `❌ Team mismatch (LIVE) on external_id ${live.external_id}: ` +
+                `DB expects ${live.home_team_id} vs ${live.away_team_id}, ` +
+                `API returned ${apiHomeLive} vs ${apiAwayLive} — no correct match found, skipping`
+              )
+              continue
+            }
           }
         }
       }
 
-      const { home, away } = extractScore(apiMatch.score)
+      const { home: rawHomeLive, away: rawAwayLive } = extractScore(apiMatch.score)
+      const home = liveScoresSwapped ? rawAwayLive : rawHomeLive
+      const away = liveScoresSwapped ? rawHomeLive : rawAwayLive
 
       const updatePayload: any = {
         status: 'LIVE',
