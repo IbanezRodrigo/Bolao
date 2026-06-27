@@ -96,10 +96,29 @@ function buildStandings(matches: Match[]): [string, TeamStanding[]][] {
   return sorted;
 }
 
+// 48-team format: the 8 best 3rd-place teams join the 24 group winners/runners-up
+// in the Round of 32. Rank all 3rd-placed teams on a single virtual table:
+//   1. Points  2. Goal difference  3. Goals scored
+function qualifyingThirdPlaceIds(standings: [string, TeamStanding[]][]): Set<string> {
+  const thirds = standings
+    .map(([, teams]) => teams[2])
+    .filter((t): t is TeamStanding => Boolean(t));
+
+  thirds.sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    if ((b.gf - b.ga) !== (a.gf - a.ga)) return (b.gf - b.ga) - (a.gf - a.ga);
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    return 0;
+  });
+
+  return new Set(thirds.slice(0, 8).map(t => t.teamId));
+}
+
 const GroupTable: React.FC<Props> = ({ lang }) => {
   const { matches, loading } = useMatches();
 
   const standings = useMemo(() => buildStandings(matches), [matches]);
+  const qualifiedThirds = useMemo(() => qualifyingThirdPlaceIds(standings), [standings]);
 
   const groupLabel = (raw: string) => {
     const letter = raw.replace(/^(Grupo|Group)\s*/i, '').trim() || raw;
@@ -153,7 +172,7 @@ const GroupTable: React.FC<Props> = ({ lang }) => {
           {teams.map((team, idx) => (
             <div
               key={team.teamId}
-              className={`flex items-center px-4 py-2.5 ${idx < teams.length - 1 ? 'border-b border-slate-50' : ''} ${idx < 2 ? 'bg-green-50/40' : ''}`}
+              className={`flex items-center px-4 py-2.5 ${idx < teams.length - 1 ? 'border-b border-slate-50' : ''} ${idx < 2 || qualifiedThirds.has(team.teamId) ? 'bg-green-50/40' : ''}`}
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-[10px] font-black text-slate-300 w-3 flex-shrink-0">{idx + 1}</span>
