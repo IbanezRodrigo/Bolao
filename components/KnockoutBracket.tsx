@@ -55,13 +55,27 @@ const isTBD = (team: Team): boolean =>
 const isTBDId = (id: string): boolean => !id || /^tbd$/i.test(id.trim());
 
 // ─── Bracket-slot resolution ──────────────────────────────────────────────────
-// R32 slot comes from the hardcoded canonical bracket order, matched by TLA pair
-// (either home/away direction). Returns -1 when the pairing isn't in the config.
-const r32Slot = (m: Match): number =>
-  R32_BRACKET_ORDER.findIndex(([a, b]) => {
-    const h = m.homeTeam.id, w = m.awayTeam.id;
-    return (a === h && b === w) || (a === w && b === h);
+// Index every (non-TBD) team in the hardcoded R32 order to its slot. Each team
+// belongs to exactly one slot, so a single known team identifies the match.
+const R32_TEAM_SLOT: Record<string, number> = (() => {
+  const map: Record<string, number> = {};
+  R32_BRACKET_ORDER.forEach(([a, b], slot) => {
+    if (!isTBDId(a)) map[a] = slot;
+    if (!isTBDId(b)) map[b] = slot;
   });
+  return map;
+})();
+
+// R32 slot is resolved by ANY one known team — not the full pair. The group
+// stage may still be unfinished, so a match can be e.g. "CIV x TBD" in the DB
+// while the config has "CIV x NOR"; matching on either side alone still lands
+// it in the right slot. Returns -1 only when neither team is known/configured.
+const r32Slot = (m: Match): number => {
+  const h = m.homeTeam.id, w = m.awayTeam.id;
+  if (!isTBDId(h) && R32_TEAM_SLOT[h] !== undefined) return R32_TEAM_SLOT[h];
+  if (!isTBDId(w) && R32_TEAM_SLOT[w] !== undefined) return R32_TEAM_SLOT[w];
+  return -1;
+};
 
 // For rounds after R32, a match's slot is derived by lineage: each of its teams
 // is the winner of exactly one match in the previous round, so the parent slot
