@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { Language } from '../types';
 import { useMatches } from '../hooks/useMatches';
 import type { Match, Team } from '../types';
+import { R32_BRACKET_ORDER } from './bracketConfig';
 
 interface Props {
   lang: Language;
@@ -50,6 +51,62 @@ const cardCtr   = (roundIdx: number, slot: number) => cardTop(roundIdx, slot) + 
 // ─── TBD detection ────────────────────────────────────────────────────────────
 const isTBD = (team: Team): boolean =>
   !team.flag || /^tbd$/i.test((team.name.en ?? '').trim());
+
+const isTBDId = (id: string): boolean => !id || /^tbd$/i.test(id.trim());
+
+// ─── Bracket-slot resolution ──────────────────────────────────────────────────
+// R32 slot comes from the hardcoded canonical bracket order, matched by TLA pair
+// (either home/away direction). Returns -1 when the pairing isn't in the config.
+const r32Slot = (m: Match): number =>
+  R32_BRACKET_ORDER.findIndex(([a, b]) => {
+    const h = m.homeTeam.id, w = m.awayTeam.id;
+    return (a === h && b === w) || (a === w && b === h);
+  });
+
+// For rounds after R32, a match's slot is derived by lineage: each of its teams
+// is the winner of exactly one match in the previous round, so the parent slot
+// is floor(prevSlot / 2). TBD teams are skipped; -1 when neither team resolves.
+const lineageSlot = (m: Match, prevOrdered: (Match | null)[]): number => {
+  for (const teamId of [m.homeTeam.id, m.awayTeam.id]) {
+    if (isTBDId(teamId)) continue;
+    const pi = prevOrdered.findIndex(
+      pm => pm != null && (pm.homeTeam.id === teamId || pm.awayTeam.id === teamId),
+    );
+    if (pi >= 0) return Math.floor(pi / 2);
+  }
+  return -1;
+};
+
+const byStartTime = (a: Match, b: Match) =>
+  new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+
+// Place a round's matches into a fixed-length slot array. Matches with a known
+// bracket slot land there; anything left over (unknown pairing / still-TBD)
+// fills the remaining holes in kickoff order so nothing is dropped.
+const orderRound = (
+  round: KnockoutRound,
+  roundMatches: Match[],
+  prevOrdered: (Match | null)[],
+): (Match | null)[] => {
+  const slots = SLOT_COUNT[round];
+  const arr: (Match | null)[] = new Array(slots).fill(null);
+  const placed = new Set<string>();
+
+  for (const m of roundMatches) {
+    const slot = round === 'R32' ? r32Slot(m) : lineageSlot(m, prevOrdered);
+    if (slot >= 0 && slot < slots && arr[slot] === null) {
+      arr[slot] = m;
+      placed.add(m.id);
+    }
+  }
+
+  const leftovers = roundMatches.filter(m => !placed.has(m.id)).sort(byStartTime);
+  let k = 0;
+  for (let i = 0; i < slots && k < leftovers.length; i++) {
+    if (arr[i] === null) arr[i] = leftovers[k++];
+  }
+  return arr;
+};
 
 // ─── TBD placeholder icon (Google shield style) ───────────────────────────────
 const TBDIcon: React.FC = () => (
@@ -228,19 +285,24 @@ const KnockoutBracket: React.FC<Props> = ({ lang }) => {
   const hasAutoScrolled  = useRef(false);
   const [selectedRound, setSelectedRound] = useState<KnockoutRound | null>(null);
 
-  // ── Group matches by round, sorted by start time within each round ─────────
+  // ── Order matches into canonical bracket slots, round by round ─────────────
+  // R32 uses the hardcoded bracket order; each later round derives its slots by
+  // lineage from the previously-ordered round (so connectors are always right,
+  // even while later rounds are still TBD).
   const matchesByRound = useMemo(() => {
-    const result = {} as Record<KnockoutRound, Match[]>;
+    const result = {} as Record<KnockoutRound, (Match | null)[]>;
+    let prevOrdered: (Match | null)[] = [];
     for (const r of ROUNDS) {
-      result[r] = matches
-        .filter(m => m.phase === r)
-        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      const roundMatches = matches.filter(m => m.phase === r);
+      const ordered = orderRound(r, roundMatches, prevOrdered);
+      result[r] = ordered;
+      prevOrdered = ordered;
     }
     return result;
   }, [matches]);
 
   const availableRounds = useMemo(
-    () => ROUNDS.filter(r => matchesByRound[r].length > 0),
+    () => ROUNDS.filter(r => matchesByRound[r].some(m => m != null)),
     [matchesByRound],
   );
 
@@ -248,7 +310,7 @@ const KnockoutBracket: React.FC<Props> = ({ lang }) => {
   const defaultRound = useMemo((): KnockoutRound => {
     if (availableRounds.length === 0) return 'R32';
     for (const r of availableRounds) {
-      if (matchesByRound[r].some(m => m.status === 'LIVE' || m.status === 'SCHEDULED')) {
+      if (matchesByRound[r].some(m => m != null && (m.status === 'LIVE' || m.status === 'SCHEDULED'))) {
         return r;
       }
     }
