@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Language } from '../types';
 import { useMatches } from '../hooks/useMatches';
+import { useTeams } from '../hooks/useTeams';
 import type { Match, Team } from '../types';
 import { R32_BRACKET_ORDER } from './bracketConfig';
 
@@ -94,9 +95,11 @@ const lineageSlot = (m: Match, prevOrdered: (Match | null)[]): number => {
 const byStartTime = (a: Match, b: Match) =>
   new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
 
-// Place a round's matches into a fixed-length slot array. Matches with a known
-// bracket slot land there; anything left over (unknown pairing / still-TBD)
-// fills the remaining holes in kickoff order so nothing is dropped.
+// Place a round (R16 and later) into a fixed-length slot array by lineage from
+// the previous round. Matches whose teams trace back to a known slot land
+// there; anything left over (still-TBD) fills the remaining holes in kickoff
+// order so nothing is dropped. R32 does NOT go through here — it's built from
+// the hardcoded config (see buildR32).
 const orderRound = (
   round: KnockoutRound,
   roundMatches: Match[],
@@ -107,7 +110,7 @@ const orderRound = (
   const placed = new Set<string>();
 
   for (const m of roundMatches) {
-    const slot = round === 'R32' ? r32Slot(m) : lineageSlot(m, prevOrdered);
+    const slot = lineageSlot(m, prevOrdered);
     if (slot >= 0 && slot < slots && arr[slot] === null) {
       arr[slot] = m;
       placed.add(m.id);
@@ -120,6 +123,61 @@ const orderRound = (
     if (arr[i] === null) arr[i] = leftovers[k++];
   }
   return arr;
+};
+
+// Placeholder team used when a hardcoded slot references a team not present in
+// the loaded match data (or a 'TBD' slot still to be filled in).
+const TBD_FALLBACK: Team = {
+  id: 'TBD',
+  name: { pt: 'A Definir', en: 'TBD', es: 'Por Definir' },
+  flag: '',
+  color: '#888888',
+};
+
+// Build the Round-of-32 column ENTIRELY from the hardcoded bracket order.
+// Teams come from config (never the DB), so the slots always show what was
+// configured. The DB match is used only to overlay kickoff time, status and
+// score — linked by the one known team, with home/away score alignment. Slots
+// whose teams aren't in the DB yet simply show the configured teams with no
+// result. R16+ then read the DB and flow winners down from here.
+const buildR32 = (dbMatches: Match[], teamFor: (tla: string) => Team): Match[] => {
+  const linked: (Match | null)[] = new Array(16).fill(null);
+  for (const m of dbMatches) {
+    const slot = r32Slot(m);
+    if (slot >= 0 && slot < 16 && linked[slot] === null) linked[slot] = m;
+  }
+
+  return R32_BRACKET_ORDER.map(([a, b], slot): Match => {
+    const db = linked[slot];
+    let homeScore = db?.actualHomeScore;
+    let awayScore = db?.actualAwayScore;
+
+    // Align the DB score to the configured home/away orientation.
+    if (db && (homeScore !== undefined || awayScore !== undefined)) {
+      const known = !isTBDId(a) ? a : (!isTBDId(b) ? b : null);
+      if (known) {
+        const knownIsConfigHome = known === a;
+        const knownIsDbHome = db.homeTeam.id === known;
+        const homeIsDbHome = knownIsConfigHome === knownIsDbHome;
+        homeScore = homeIsDbHome ? db.actualHomeScore : db.actualAwayScore;
+        awayScore = homeIsDbHome ? db.actualAwayScore : db.actualHomeScore;
+      }
+    }
+
+    return {
+      id: db?.id ?? `r32-slot-${slot}`,
+      homeTeam: teamFor(a),
+      awayTeam: teamFor(b),
+      startTime: db?.startTime ?? '',
+      venue: db?.venue ?? '',
+      group: db?.group ?? '',
+      phase: 'R32',
+      status: db?.status ?? 'SCHEDULED',
+      actualHomeScore: homeScore,
+      actualAwayScore: awayScore,
+      externalId: db?.externalId,
+    };
+  });
 };
 
 // ─── TBD placeholder icon (Google shield style) ───────────────────────────────
@@ -166,8 +224,9 @@ const MatchCard = React.memo<MatchCardProps>(({ match, lang, roundIdx, slot }) =
   const awayWins   = isFinished && hasScore && match.actualAwayScore! > match.actualHomeScore!;
 
   const matchDate = new Date(match.startTime);
-  const dateStr   = matchDate.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
-  const timeStr   = matchDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  const hasDate   = !!match.startTime && !isNaN(matchDate.getTime());
+  const dateStr   = hasDate ? matchDate.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+  const timeStr   = hasDate ? matchDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
 
   return (
     <div
@@ -293,27 +352,34 @@ const ConnectorSVG: React.FC<ConnectorSVGProps> = ({ fromRoundIdx }) => {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const KnockoutBracket: React.FC<Props> = ({ lang }) => {
-  const { matches, loading } = useMatches();
+  const { matches, loading: matchesLoading } = useMatches();
+  const { teamsById, loading: teamsLoading } = useTeams();
+  const loading = matchesLoading || teamsLoading;
   const bracketRef       = useRef<HTMLDivElement>(null);
   const pillsRef         = useRef<HTMLDivElement>(null);
   const hasAutoScrolled  = useRef(false);
   const [selectedRound, setSelectedRound] = useState<KnockoutRound | null>(null);
 
   // ── Order matches into canonical bracket slots, round by round ─────────────
-  // R32 uses the hardcoded bracket order; each later round derives its slots by
-  // lineage from the previously-ordered round (so connectors are always right,
-  // even while later rounds are still TBD).
+  // R32 is built purely from the hardcoded config; team flags/names come from
+  // the teams reference table (so projected teams not yet in any match still
+  // render). R16 → Final read the DB and derive their slots by lineage from the
+  // previous round, so winners flow down the bracket as the DB fills them in.
   const matchesByRound = useMemo(() => {
+    const teamFor = (tla: string): Team =>
+      (isTBDId(tla) ? undefined : teamsById[tla]) ?? TBD_FALLBACK;
+
     const result = {} as Record<KnockoutRound, (Match | null)[]>;
-    let prevOrdered: (Match | null)[] = [];
-    for (const r of ROUNDS) {
-      const roundMatches = matches.filter(m => m.phase === r);
-      const ordered = orderRound(r, roundMatches, prevOrdered);
+    result.R32 = buildR32(matches.filter(m => m.phase === 'R32'), teamFor);
+
+    let prevOrdered: (Match | null)[] = result.R32;
+    for (const r of ROUNDS.slice(1)) {
+      const ordered = orderRound(r, matches.filter(m => m.phase === r), prevOrdered);
       result[r] = ordered;
       prevOrdered = ordered;
     }
     return result;
-  }, [matches]);
+  }, [matches, teamsById]);
 
   const availableRounds = useMemo(
     () => ROUNDS.filter(r => matchesByRound[r].some(m => m != null)),
