@@ -32,20 +32,16 @@ export const R32_BRACKET_ORDER: ReadonlyArray<readonly [TLA, TLA]> = [
   ['NED', 'MAR'], // slot 1  ┘
   ['GER', 'PAR'], // slot 2  ┐ R16 slot 1
   ['FRA', 'SWE'], // slot 3  ┘
-  ['BEL', 'TBD'], // slot 4  ┐ R16 slot 2
+  ['BEL', 'SEN'], // slot 4  ┐ R16 slot 2
   ['USA', 'BIH'], // slot 5  ┘
-  ['ESP', 'TBD'], // slot 6  ┐ R16 slot 3
-  ['TBD', 'TBD'], // slot 7  ┘
+  ['ESP', 'AUT'], // slot 6  ┐ R16 slot 3
+  ['POR', 'CRO'], // slot 7  ┘
   ['BRA', 'JPN'], // slot 8  ┐ R16 slot 4
   ['CIV', 'NOR'], // slot 9  ┘
-  ['MEX', 'TBD'], // slot 10 ┐ R16 slot 5
-  ['TBD', 'TBD'], // slot 11 ┘
-  ['SUI', 'TBD'], // slot 12 ┐ R16 slot 6
-  ['TBD', 'TBD'], // slot 13 ┘
+  ['MEX', 'ECU'], // slot 10 ┐ R16 slot 5
+  ['ENG', 'COD'], // slot 11 ┘
+  ['SUI', 'ALG'], // slot 12 ┐ R16 slot 6
+  ['COL', 'GHA'], // slot 13 ┘
   ['AUS', 'EGY'], // slot 14 ┐ R16 slot 7
   ['ARG', 'CPV'], // slot 15 ┘
 ];
-// NOTE: 'TBD' entries are placeholders for matchups not yet decided by the
-// group stage. Once those are known, replace each 'TBD' with the real team TLA
-// so the pairing is unique — duplicate ['TBD','TBD'] rows can only be matched
-// positionally and fall back to kickoff order until resolved.
