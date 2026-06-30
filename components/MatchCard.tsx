@@ -152,7 +152,9 @@ const getFifaUrl = (externalId: string | undefined): string | null => {
   if (!externalId) return null;
   const fifaId = FIFA_ID_MAP[externalId];
   if (!fifaId) return null;
-  return `https://www.fifa.com/en/match-centre/match/17/285023/289273/${fifaId}`;
+  // Fase de grupos usa o segmento 289273; a partir do R32 (mata-mata) a FIFA usa 289287
+  const stageSegment = Number(fifaId) >= 400021512 ? '289287' : '289273';
+  return `https://www.fifa.com/en/match-centre/match/17/285023/${stageSegment}/${fifaId}`;
 };
 
 // Formata horário no timezone local do browser do usuário
