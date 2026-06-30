@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Language } from '../types';
 import { TRANSLATIONS } from '../constants';
 import MatchCard from './MatchCard';
@@ -26,12 +26,23 @@ const PHASE_LABELS: Record<Phase, Record<string, string>> = {
   FINAL: { pt: 'Final',            en: 'Final',           es: 'Final'              },
 };
 
+// Retorna a chave de data (YYYY-MM-DD) no fuso horário LOCAL do navegador do usuário,
+// não em UTC. Isso garante que o jogo apareça sob o dia correto para cada usuário,
+// independente de onde ele esteja (Brasil, Europa, etc).
+const getLocalDateKey = (isoString: string): string => {
+  const d = new Date(isoString);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const groupMatchesByPhaseAndDate = (matches: Match[]): Record<string, Record<string, Match[]>> => {
   const result: Record<string, Record<string, Match[]>> = {};
   matches.forEach(m => {
     const phase = (m.phase || 'GROUP') as Phase;
     if (!result[phase]) result[phase] = {};
-    const dateKey = new Date(m.startTime).toISOString().split('T')[0];
+    const dateKey = getLocalDateKey(m.startTime);
     if (!result[phase][dateKey]) result[phase][dateKey] = [];
     result[phase][dateKey].push(m);
   });
@@ -55,25 +66,16 @@ const ChevronIcon = ({ open }: { open: boolean }) => (
   </svg>
 );
 
-/**
- * Detecta a fase atual: a fase com o jogo mais próximo no futuro.
- * Se todos os jogos estão finalizados, retorna a última fase.
- */
-const detectCurrentPhase = (upcomingMatches: Match[]): Phase => {
-  if (upcomingMatches.length === 0) return 'FINAL';
-  const now = Date.now();
-  const next = upcomingMatches
-    .slice()
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
-  return (next.phase || 'GROUP') as Phase;
-};
-
 const MatchList: React.FC<MatchListProps> = ({ lang, groupId }) => {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+
+  // Finished: collapsed by default at top
   const [showFinished, setShowFinished] = useState(false);
   const [openFinishedPhases, setOpenFinishedPhases] = useState<Record<string, boolean>>({});
-  // openUpcomingPhases starts empty — populated after matches load
-  const [openUpcomingPhases, setOpenUpcomingPhases] = useState<Record<string, boolean> | null>(null);
+
+  // Upcoming: GROUP open by default, rest collapsed
+  const [openUpcomingPhases, setOpenUpcomingPhases] = useState<Record<string, boolean>>({ GROUP: true });
+
   const [currentUserId, setCurrentUserId] = useState<string>('');
 
   const { matches, loading: matchesLoading, error: matchesError } = useMatches();
@@ -86,37 +88,22 @@ const MatchList: React.FC<MatchListProps> = ({ lang, groupId }) => {
     });
   }, []);
 
-  const finishedMatches = useMemo(() =>
-    matches
-      .filter(m => m.status === 'FINISHED')
-      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()),
-    [matches]
-  );
+  const finishedMatches = matches
+    .filter(m => m.status === 'FINISHED')
+    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
-  const upcomingMatches = useMemo(() =>
-    matches
-      .filter(m => m.status !== 'FINISHED')
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
-    [matches]
-  );
+  const upcomingMatches = matches
+    .filter(m => m.status !== 'FINISHED')
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-  // Detecta fase atual e inicializa dropdowns uma única vez após load
-  React.useEffect(() => {
-    if (matches.length === 0 || openUpcomingPhases !== null) return;
-    const currentPhase = detectCurrentPhase(upcomingMatches);
-    const initial: Record<string, boolean> = {};
-    PHASE_ORDER.forEach(p => { initial[p] = p === currentPhase; });
-    setOpenUpcomingPhases(initial);
-  }, [matches, upcomingMatches, openUpcomingPhases]);
-
-  const finishedByPhase = useMemo(() => groupMatchesByPhaseAndDate(finishedMatches), [finishedMatches]);
-  const upcomingByPhase = useMemo(() => groupMatchesByPhaseAndDate(upcomingMatches), [upcomingMatches]);
+  const finishedByPhase = groupMatchesByPhaseAndDate(finishedMatches);
+  const upcomingByPhase = groupMatchesByPhaseAndDate(upcomingMatches);
 
   const toggleFinishedPhase = (phase: string) =>
     setOpenFinishedPhases(prev => ({ ...prev, [phase]: !prev[phase] }));
 
   const toggleUpcomingPhase = (phase: string) =>
-    setOpenUpcomingPhases(prev => ({ ...prev!, [phase]: !prev![phase] }));
+    setOpenUpcomingPhases(prev => ({ ...prev, [phase]: !prev[phase] }));
 
   const handleSavePrediction = async (pred: Prediction) => {
     if (!selectedMatch) return;
@@ -173,6 +160,7 @@ const MatchList: React.FC<MatchListProps> = ({ lang, groupId }) => {
 
           {showFinished && (
             <div className="space-y-3">
+              {/* Fases de trás para frente (mais recente primeiro) */}
               {[...PHASE_ORDER].reverse().filter(phase => finishedByPhase[phase]).map(phase => (
                 <div key={phase} className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden shadow-sm">
                   <button
@@ -225,8 +213,8 @@ const MatchList: React.FC<MatchListProps> = ({ lang, groupId }) => {
         </div>
       )}
 
-      {/* ── PRÓXIMOS JOGOS — fase atual aberta automaticamente ── */}
-      {upcomingMatches.length > 0 && openUpcomingPhases !== null && (
+      {/* ── PRÓXIMOS JOGOS — por fase, GROUP aberto por padrão ── */}
+      {upcomingMatches.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-3 px-1">
             <h4 className="font-black text-slate-900 uppercase tracking-widest text-xs">
