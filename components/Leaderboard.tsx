@@ -23,8 +23,33 @@ interface LeaderboardEntry {
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
 
+// Trend direction relative to the previous ranking snapshot: 1 = up, -1 = down, 0 = same/new.
+type Trend = 1 | -1 | 0;
+
+const positionsStorageKey = (groupId: string) => `ranking_positions_${groupId}`;
+
+// Arrowhead-only indicator (no stem). Up = green, down = red, same = grey dash.
+const TrendIndicator: React.FC<{ trend: Trend }> = ({ trend }) => {
+  if (trend === 1) {
+    return (
+      <svg className="w-3 h-3 text-green-500" viewBox="0 0 12 12" fill="currentColor" aria-label="up">
+        <path d="M6 2 11 9 1 9 Z" />
+      </svg>
+    );
+  }
+  if (trend === -1) {
+    return (
+      <svg className="w-3 h-3 text-red-500" viewBox="0 0 12 12" fill="currentColor" aria-label="down">
+        <path d="M6 10 1 3 11 3 Z" />
+      </svg>
+    );
+  }
+  return <span className="block w-2.5 h-0.5 rounded-full bg-slate-300" aria-label="same" />;
+};
+
 const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [trends, setTrends] = useState<Record<string, Trend>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'ranking' | 'table' | 'knockout'>('ranking');
@@ -44,7 +69,41 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
         .order('total_points', { ascending: false });
 
       if (fetchError) throw fetchError;
-      setEntries(data || []);
+
+      const rows = (data || []) as LeaderboardEntry[];
+
+      // Compute trends purely on the client by comparing the new positions
+      // against the previous snapshot persisted in localStorage.
+      try {
+        const key = positionsStorageKey(groupId);
+        const raw = localStorage.getItem(key);
+        const prev: Record<string, number> = raw ? JSON.parse(raw) : {};
+
+        const current: Record<string, number> = {};
+        const nextTrends: Record<string, Trend> = {};
+        rows.forEach((entry, index) => {
+          const pos = index + 1;
+          current[entry.user_id] = pos;
+          const prevPos = prev[entry.user_id];
+          if (prevPos === undefined) {
+            nextTrends[entry.user_id] = 0; // newcomer → neutral
+          } else if (pos < prevPos) {
+            nextTrends[entry.user_id] = 1; // smaller position number → moved up
+          } else if (pos > prevPos) {
+            nextTrends[entry.user_id] = -1; // moved down
+          } else {
+            nextTrends[entry.user_id] = 0; // unchanged
+          }
+        });
+
+        setTrends(nextTrends);
+        localStorage.setItem(key, JSON.stringify(current));
+      } catch {
+        // localStorage unavailable / parse error → just skip trend indicators
+        setTrends({});
+      }
+
+      setEntries(rows);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar ranking');
     } finally {
@@ -161,6 +220,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
             <span className="flex-1 text-[10px] font-black text-slate-400 uppercase tracking-widest ml-3">
               {lang === 'pt' ? 'Jogador' : lang === 'es' ? 'Jugador' : 'Player'}
             </span>
+            <span className="w-5 flex-shrink-0" aria-hidden="true" />
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-right w-10">
               {lang === 'pt' ? 'Exatos' : lang === 'es' ? 'Exactos' : 'Exact'}
             </span>
@@ -197,6 +257,11 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
                         {entry.total_predictions} {lang === 'pt' ? 'palpites' : lang === 'es' ? 'pronósticos' : 'predictions'}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Tendência */}
+                  <div className="w-5 flex-shrink-0 flex items-center justify-center">
+                    <TrendIndicator trend={trends[entry.user_id] ?? 0} />
                   </div>
 
                   {/* Exatos */}
