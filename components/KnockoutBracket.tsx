@@ -480,12 +480,12 @@ const KnockoutBracket: React.FC<Props> = ({ lang, onShowTable }) => {
 
   return (
     <div className="pb-4">
-      {/* ── Link discreto: tabela da fase de grupos ─────────────────────── */}
+      {/* ── Link: tabela da fase de grupos ──────────────────────────────── */}
       {onShowTable && (
-        <div className="flex justify-end mb-2 px-1">
+        <div className="flex justify-start mb-2 px-1">
           <button
             onClick={onShowTable}
-            className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-600 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg bg-slate-100 text-slate-900 hover:bg-slate-200 transition-all"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 6h18M3 14h18M3 18h18" />
