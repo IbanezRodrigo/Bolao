@@ -429,13 +429,15 @@ const KnockoutBracket: React.FC<Props> = ({ lang, onShowTable }) => {
   const handleBracketScroll = useCallback(() => {
     const el = bracketRef.current;
     if (!el) return;
-    const viewCenter = el.scrollLeft + el.clientWidth / 2;
+    const scrollLeft = el.scrollLeft;
 
+    // Compara pela borda esquerda (mesma referência usada em scrollToRound),
+    // não pelo centro do viewport — evita que o pill "pule" pra coluna
+    // seguinte quando mais de uma coluna cabe na tela.
     let closest: KnockoutRound = ROUNDS[0];
     let minDist = Infinity;
     for (const r of ROUNDS) {
-      const colCenter = getColLeft(r) + CARD_W / 2;
-      const dist = Math.abs(colCenter - viewCenter);
+      const dist = Math.abs(getColLeft(r) - scrollLeft);
       if (dist < minDist) { minDist = dist; closest = r; }
     }
     setSelectedRound(prev => (prev === closest ? prev : closest));
