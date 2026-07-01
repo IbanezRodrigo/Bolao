@@ -23,12 +23,12 @@ interface LeaderboardEntry {
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
 
-// Trend direction relative to the previous ranking snapshot: 1 = up, -1 = down, 0 = same/new.
 type Trend = 1 | -1 | 0;
 
-const positionsStorageKey = (groupId: string) => `ranking_positions_${groupId}`;
+// Duas chaves: snapshot anterior (antes da última mudança) e pontos da última vez
+const prevPositionsKey = (groupId: string) => `ranking_prev_positions_${groupId}`;
+const lastPointsKey    = (groupId: string) => `ranking_last_points_${groupId}`;
 
-// Arrowhead-only indicator (no stem). Up = green, down = red, same = grey dash.
 const TrendIndicator: React.FC<{ trend: Trend }> = ({ trend }) => {
   if (trend === 1) {
     return (
@@ -48,10 +48,10 @@ const TrendIndicator: React.FC<{ trend: Trend }> = ({ trend }) => {
 };
 
 const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [trends, setTrends] = useState<Record<string, Trend>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [entries, setEntries]     = useState<LeaderboardEntry[]>([]);
+  const [trends, setTrends]       = useState<Record<string, Trend>>({});
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'ranking' | 'table' | 'knockout'>('ranking');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const t = TRANSLATIONS[lang];
@@ -72,34 +72,71 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
 
       const rows = (data || []) as LeaderboardEntry[];
 
-      // Compute trends purely on the client by comparing the new positions
-      // against the previous snapshot persisted in localStorage.
       try {
-        const key = positionsStorageKey(groupId);
-        const raw = localStorage.getItem(key);
-        const prev: Record<string, number> = raw ? JSON.parse(raw) : {};
+        const pKey = prevPositionsKey(groupId);
+        const lKey = lastPointsKey(groupId);
 
-        const current: Record<string, number> = {};
+        const rawPrev  = localStorage.getItem(pKey);
+        const rawLast  = localStorage.getItem(lKey);
+
+        // Snapshot anterior de posições (para calcular setas)
+        const prevPositions: Record<string, number> = rawPrev ? JSON.parse(rawPrev) : {};
+
+        // Pontos da última vez que vimos o ranking
+        const lastPoints: Record<string, number> = rawLast ? JSON.parse(rawLast) : {};
+
+        // Posições e pontos atuais
+        const currentPositions: Record<string, number> = {};
+        const currentPoints: Record<string, number>    = {};
+        rows.forEach((entry, index) => {
+          currentPositions[entry.user_id] = index + 1;
+          currentPoints[entry.user_id]    = entry.total_points;
+        });
+
+        // Verifica se algum ponto mudou desde a última vez
+        const pointsChanged = rows.some(
+          e => lastPoints[e.user_id] === undefined || lastPoints[e.user_id] !== e.total_points
+        );
+
+        if (pointsChanged) {
+          // Salva as posições ANTERIORES (antes desta mudança) como snapshot para setas
+          // Só faz isso se já tínhamos lastPoints (não na primeira carga)
+          if (Object.keys(lastPoints).length > 0) {
+            // O snapshot anterior é o lastPositions que tínhamos guardado
+            const rawLastPos = localStorage.getItem(pKey + '_current');
+            if (rawLastPos) {
+              localStorage.setItem(pKey, rawLastPos);
+            }
+          }
+          // Salva posições atuais como "current" para próxima comparação
+          localStorage.setItem(pKey + '_current', JSON.stringify(currentPositions));
+          // Atualiza pontos
+          localStorage.setItem(lKey, JSON.stringify(currentPoints));
+        } else if (Object.keys(prevPositions).length === 0) {
+          // Primeira carga: inicializa sem setas
+          localStorage.setItem(pKey + '_current', JSON.stringify(currentPositions));
+          localStorage.setItem(lKey, JSON.stringify(currentPoints));
+        }
+
+        // Calcula setas comparando posição atual vs snapshot anterior
+        const finalPrev: Record<string, number> = rawPrev ? JSON.parse(localStorage.getItem(pKey) || '{}') : {};
         const nextTrends: Record<string, Trend> = {};
         rows.forEach((entry, index) => {
-          const pos = index + 1;
-          current[entry.user_id] = pos;
-          const prevPos = prev[entry.user_id];
+          const pos     = index + 1;
+          const prevPos = finalPrev[entry.user_id];
           if (prevPos === undefined) {
-            nextTrends[entry.user_id] = 0; // newcomer → neutral
+            nextTrends[entry.user_id] = 0;
           } else if (pos < prevPos) {
-            nextTrends[entry.user_id] = 1; // smaller position number → moved up
+            nextTrends[entry.user_id] = 1;
           } else if (pos > prevPos) {
-            nextTrends[entry.user_id] = -1; // moved down
+            nextTrends[entry.user_id] = -1;
           } else {
-            nextTrends[entry.user_id] = 0; // unchanged
+            nextTrends[entry.user_id] = 0;
           }
         });
 
         setTrends(nextTrends);
-        localStorage.setItem(key, JSON.stringify(current));
       } catch {
-        // localStorage unavailable / parse error → just skip trend indicators
         setTrends({});
       }
 
@@ -113,14 +150,9 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
 
   useEffect(() => {
     if (!groupId) { setLoading(false); return; }
-
-    fetchLeaderboard(false); // primeira carga com spinner
-
-    intervalRef.current = setInterval(() => fetchLeaderboard(true), REFRESH_INTERVAL_MS); // refresh silencioso
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    fetchLeaderboard(false);
+    intervalRef.current = setInterval(() => fetchLeaderboard(true), REFRESH_INTERVAL_MS);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [groupId, fetchLeaderboard]);
 
   const medalEmoji = (pos: number) => {
@@ -143,7 +175,6 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
             </span>
           )}
         </div>
-        {/* Pill toggle */}
         <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
           <button
             onClick={() => setActiveView('ranking')}
@@ -172,33 +203,17 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
         </div>
       </div>
 
-      {/* Table view */}
-      {activeView === 'table' && (
-        <div className="p-4">
-          <GroupTable lang={lang} />
-        </div>
-      )}
+      {activeView === 'table' && <div className="p-4"><GroupTable lang={lang} /></div>}
+      {activeView === 'knockout' && <div className="p-4"><KnockoutBracket lang={lang} /></div>}
 
-      {/* Knockout view */}
-      {activeView === 'knockout' && (
-        <div className="p-4">
-          <KnockoutBracket lang={lang} />
-        </div>
-      )}
-
-      {/* Loading (primeira carga) */}
       {activeView === 'ranking' && loading && (
         <div className="flex justify-center items-center py-12">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
       )}
-
-      {/* Error */}
       {activeView === 'ranking' && error && (
         <div className="p-6 text-center text-red-500 text-sm font-bold">{error}</div>
       )}
-
-      {/* Empty */}
       {activeView === 'ranking' && !loading && !error && entries.length === 0 && (
         <div className="p-12 text-center">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -212,7 +227,6 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
         </div>
       )}
 
-      {/* Column headers */}
       {activeView === 'ranking' && !loading && !error && entries.length > 0 && (
         <div>
           <div className="flex items-center px-4 py-2 border-b border-slate-100">
@@ -229,7 +243,6 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
             </span>
           </div>
 
-          {/* Rows */}
           <div className="divide-y divide-slate-50">
             {entries.map((entry, index) => {
               const pos = index + 1;
@@ -239,12 +252,9 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
                   key={entry.user_id}
                   className={`flex items-center px-4 py-3 transition-colors hover:bg-slate-50/50 ${pos <= 3 ? 'bg-yellow-50/20' : ''}`}
                 >
-                  {/* Posição */}
                   <div className="w-8 flex-shrink-0">
                     <span className="text-lg">{medalEmoji(pos)}</span>
                   </div>
-
-                  {/* Avatar + Nome */}
                   <div className="flex items-center gap-2 flex-1 min-w-0 ml-3">
                     <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-blue-600 font-black text-xs overflow-hidden shadow-sm flex-shrink-0">
                       {entry.photo_url ? (
@@ -258,18 +268,12 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
                       </p>
                     </div>
                   </div>
-
-                  {/* Tendência */}
                   <div className="w-5 flex-shrink-0 flex items-center justify-center">
                     <TrendIndicator trend={trends[entry.user_id] ?? 0} />
                   </div>
-
-                  {/* Exatos */}
                   <div className="w-10 flex-shrink-0 text-right">
                     <span className="text-xs font-black text-slate-500">{entry.exact_count}</span>
                   </div>
-
-                  {/* Pontos */}
                   <div className="w-14 flex-shrink-0 text-right ml-2">
                     <span className={`text-lg font-black ${pos === 1 ? 'text-yellow-600' : pos === 2 ? 'text-slate-500' : pos === 3 ? 'text-orange-500' : 'text-slate-800'}`}>
                       {Number(entry.total_points).toFixed(1)}
