@@ -7,6 +7,7 @@ import { R32_BRACKET_ORDER } from './bracketConfig';
 
 interface Props {
   lang: Language;
+  onShowTable?: () => void;
 }
 
 type KnockoutRound = 'R32' | 'R16' | 'QF' | 'SF' | 'FINAL';
@@ -351,7 +352,7 @@ const ConnectorSVG: React.FC<ConnectorSVGProps> = ({ fromRoundIdx }) => {
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
-const KnockoutBracket: React.FC<Props> = ({ lang }) => {
+const KnockoutBracket: React.FC<Props> = ({ lang, onShowTable }) => {
   const { matches, loading: matchesLoading } = useMatches();
   const { teamsById, loading: teamsLoading } = useTeams();
   const loading = matchesLoading || teamsLoading;
@@ -512,6 +513,21 @@ const KnockoutBracket: React.FC<Props> = ({ lang }) => {
           );
         })}
       </div>
+
+      {/* ── Link discreto: tabela da fase de grupos ─────────────────────── */}
+      {onShowTable && (
+        <div className="flex justify-end mb-3 px-1">
+          <button
+            onClick={onShowTable}
+            className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-600 transition-colors"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 6h18M3 14h18M3 18h18" />
+            </svg>
+            {lang === 'pt' ? 'Ver tabela da fase de grupos' : lang === 'es' ? 'Ver tabla de fase de grupos' : 'View group stage table'}
+          </button>
+        </div>
+      )}
 
       {/* ── Bracket scroll container ─────────────────────────────────────── */}
       <div
