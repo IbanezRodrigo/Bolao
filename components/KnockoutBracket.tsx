@@ -359,6 +359,8 @@ const KnockoutBracket: React.FC<Props> = ({ lang, onShowTable }) => {
   const bracketRef       = useRef<HTMLDivElement>(null);
   const pillsRef         = useRef<HTMLDivElement>(null);
   const hasAutoScrolled  = useRef(false);
+  const isClickScrolling = useRef(false);
+  const clickScrollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedRound, setSelectedRound] = useState<KnockoutRound | null>(null);
 
   // ── Order matches into canonical bracket slots, round by round ─────────────
@@ -409,10 +411,19 @@ const KnockoutBracket: React.FC<Props> = ({ lang, onShowTable }) => {
 
   const scrollToRound = useCallback(
     (round: KnockoutRound, smooth = true) => {
+      // Marca que este scroll foi disparado por clique, não por swipe manual —
+      // evita que o listener de scroll recalcule e sobrescreva o pill certo
+      // enquanto a animação ainda está em andamento (bug de clique rápido
+      // sequencial entre pills).
+      isClickScrolling.current = true;
+      if (clickScrollTimeout.current) clearTimeout(clickScrollTimeout.current);
       bracketRef.current?.scrollTo({
         left: getColLeft(round),
         behavior: smooth ? 'smooth' : 'auto',
       });
+      clickScrollTimeout.current = setTimeout(() => {
+        isClickScrolling.current = false;
+      }, 500);
     },
     [getColLeft],
   );
@@ -427,6 +438,7 @@ const KnockoutBracket: React.FC<Props> = ({ lang, onShowTable }) => {
 
   // ── Scroll listener: update active pill as user swipes ────────────────────
   const handleBracketScroll = useCallback(() => {
+    if (isClickScrolling.current) return; // scroll disparado por clique — não recalcular
     const el = bracketRef.current;
     if (!el) return;
     const scrollLeft = el.scrollLeft;
@@ -487,7 +499,7 @@ const KnockoutBracket: React.FC<Props> = ({ lang, onShowTable }) => {
         <div className="flex justify-start mb-2 px-1">
           <button
             onClick={onShowTable}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg bg-slate-100 text-slate-900 hover:bg-slate-200 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 6h18M3 14h18M3 18h18" />
