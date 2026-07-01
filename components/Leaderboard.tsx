@@ -175,6 +175,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
             </span>
           )}
         </div>
+        {/* Pill toggle */}
         <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
           <button
             onClick={() => setActiveView('ranking')}
@@ -183,14 +184,6 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
             }`}
           >
             {t.ranking}
-          </button>
-          <button
-            onClick={() => setActiveView('table')}
-            className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
-              activeView === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'
-            }`}
-          >
-            {lang === 'pt' ? 'Tabela' : lang === 'es' ? 'Tabla' : 'Table'}
           </button>
           <button
             onClick={() => setActiveView('knockout')}
@@ -203,17 +196,33 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
         </div>
       </div>
 
-      {activeView === 'table' && <div className="p-4"><GroupTable lang={lang} /></div>}
-      {activeView === 'knockout' && <div className="p-4"><KnockoutBracket lang={lang} /></div>}
+      {/* Table view */}
+      {activeView === 'table' && (
+        <div className="p-4">
+          <GroupTable lang={lang} />
+        </div>
+      )}
 
+      {/* Knockout view */}
+      {activeView === 'knockout' && (
+        <div className="p-4">
+          <KnockoutBracket lang={lang} onShowTable={() => setActiveView('table')} />
+        </div>
+      )}
+
+      {/* Loading (primeira carga) */}
       {activeView === 'ranking' && loading && (
         <div className="flex justify-center items-center py-12">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
       )}
+
+      {/* Error */}
       {activeView === 'ranking' && error && (
         <div className="p-6 text-center text-red-500 text-sm font-bold">{error}</div>
       )}
+
+      {/* Empty */}
       {activeView === 'ranking' && !loading && !error && entries.length === 0 && (
         <div className="p-12 text-center">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -227,6 +236,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
         </div>
       )}
 
+      {/* Column headers */}
       {activeView === 'ranking' && !loading && !error && entries.length > 0 && (
         <div>
           <div className="flex items-center px-4 py-2 border-b border-slate-100">
@@ -243,6 +253,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
             </span>
           </div>
 
+          {/* Rows */}
           <div className="divide-y divide-slate-50">
             {entries.map((entry, index) => {
               const pos = index + 1;
@@ -252,9 +263,12 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
                   key={entry.user_id}
                   className={`flex items-center px-4 py-3 transition-colors hover:bg-slate-50/50 ${pos <= 3 ? 'bg-yellow-50/20' : ''}`}
                 >
+                  {/* Posição */}
                   <div className="w-8 flex-shrink-0">
                     <span className="text-lg">{medalEmoji(pos)}</span>
                   </div>
+
+                  {/* Avatar + Nome */}
                   <div className="flex items-center gap-2 flex-1 min-w-0 ml-3">
                     <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-blue-600 font-black text-xs overflow-hidden shadow-sm flex-shrink-0">
                       {entry.photo_url ? (
@@ -268,12 +282,18 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ lang, groupId }) => {
                       </p>
                     </div>
                   </div>
+
+                  {/* Tendência */}
                   <div className="w-5 flex-shrink-0 flex items-center justify-center">
                     <TrendIndicator trend={trends[entry.user_id] ?? 0} />
                   </div>
+
+                  {/* Exatos */}
                   <div className="w-10 flex-shrink-0 text-right">
                     <span className="text-xs font-black text-slate-500">{entry.exact_count}</span>
                   </div>
+
+                  {/* Pontos */}
                   <div className="w-14 flex-shrink-0 text-right ml-2">
                     <span className={`text-lg font-black ${pos === 1 ? 'text-yellow-600' : pos === 2 ? 'text-slate-500' : pos === 3 ? 'text-orange-500' : 'text-slate-800'}`}>
                       {Number(entry.total_points).toFixed(1)}
