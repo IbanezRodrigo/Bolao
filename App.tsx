@@ -10,6 +10,7 @@ import GroupDashboard from './components/GroupDashboard';
 import Rules from './components/Rules';
 import ResetPassword from './components/ResetPassword'; // NEW
 import { supabase } from './supabase';
+import { Analytics } from '@vercel/analytics/react';
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('pt');
@@ -373,6 +374,7 @@ const App: React.FC = () => {
           })}
         </nav>
       )}
+      <Analytics />
     </div>
   );
 };
